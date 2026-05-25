@@ -105,7 +105,7 @@ ringly uninstall --legacy      # também remove hooks antigos de PowerShell
 
 ### Migração do sistema PowerShell antigo
 
-Se você já tinha um sistema **caseiro** de notificações em
+Se você já tinha um sistema **próprio** de notificações em
 `~/.claude/hooks/notify-toast.ps1` (que foi o que originou o Ringly), o `doctor`
 vai detectar e te alertar. Para evitar **notificações duplicadas**, rode antes
 de instalar:
