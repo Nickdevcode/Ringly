@@ -1,5 +1,6 @@
 import { Box, Text, useInput } from "ink";
 import { type FC, useState } from "react";
+import type { Translator } from "../../core/translator.js";
 import { Footer } from "../components/Footer.js";
 import { Header } from "../components/Header.js";
 
@@ -9,6 +10,7 @@ export interface SoundDebugValues {
 }
 
 export interface SoundDebugPickerProps {
+  translator: Translator;
   initial: SoundDebugValues;
   onSubmit: (values: SoundDebugValues) => void;
 }
@@ -16,26 +18,26 @@ export interface SoundDebugPickerProps {
 interface Field {
   key: keyof SoundDebugValues;
   icon: string;
-  label: string;
-  description: string;
+  labelKey: string;
+  descKey: string;
 }
 
 const FIELDS: readonly Field[] = [
   {
     key: "sound",
     icon: "🔊",
-    label: "Play notification sounds",
-    description: "Plays the OS toast sound on every event",
+    labelKey: "tui.sound.sound.label",
+    descKey: "tui.sound.sound.desc",
   },
   {
     key: "debug",
     icon: "🪵",
-    label: "Write debug logs",
-    description: "Verbose log file (rotated by size)",
+    labelKey: "tui.sound.debug.label",
+    descKey: "tui.sound.debug.desc",
   },
 ];
 
-export const SoundDebugPicker: FC<SoundDebugPickerProps> = ({ initial, onSubmit }) => {
+export const SoundDebugPicker: FC<SoundDebugPickerProps> = ({ translator, initial, onSubmit }) => {
   const [values, setValues] = useState<SoundDebugValues>(initial);
   const [cursor, setCursor] = useState(0);
 
@@ -52,10 +54,11 @@ export const SoundDebugPicker: FC<SoundDebugPickerProps> = ({ initial, onSubmit 
   return (
     <Box flexDirection="column">
       <Header
+        translator={translator}
         step={3}
         totalSteps={4}
-        title="Sound and logging"
-        subtitle="Toggle sound and verbose logging."
+        title={translator.t("tui.sound.title")}
+        subtitle={translator.t("tui.sound.subtitle")}
       />
 
       <Box flexDirection="column" paddingLeft={2}>
@@ -65,6 +68,8 @@ export const SoundDebugPicker: FC<SoundDebugPickerProps> = ({ initial, onSubmit 
           const checkbox = checked ? "◉" : "◯";
           const checkboxColor = checked ? "green" : "gray";
           const cursorMark = active ? "›" : " ";
+          const label = translator.t(field.labelKey);
+          const description = translator.t(field.descKey);
 
           return (
             <Box key={field.key} flexDirection="row" gap={1}>
@@ -79,12 +84,12 @@ export const SoundDebugPicker: FC<SoundDebugPickerProps> = ({ initial, onSubmit 
               <Text>{field.icon}</Text>
               {active ? (
                 <Text bold color="cyan">
-                  {field.label}
+                  {label}
                 </Text>
               ) : (
-                <Text>{field.label}</Text>
+                <Text>{label}</Text>
               )}
-              <Text dimColor>— {field.description}</Text>
+              <Text dimColor>— {description}</Text>
             </Box>
           );
         })}
@@ -92,9 +97,9 @@ export const SoundDebugPicker: FC<SoundDebugPickerProps> = ({ initial, onSubmit 
 
       <Footer
         hints={[
-          { key: "↑/↓", label: "move" },
-          { key: "Space", label: "toggle" },
-          { key: "Enter", label: "confirm" },
+          { key: "↑/↓", label: translator.t("tui.footer.move") },
+          { key: "Space", label: translator.t("tui.footer.toggle") },
+          { key: "Enter", label: translator.t("tui.footer.confirm") },
         ]}
       />
     </Box>

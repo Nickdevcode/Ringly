@@ -1,15 +1,45 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { spawn, spawnSync as nodeSpawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
+import { existsSync, readFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
-import { appendFileSync } from "node:fs";
+
+const requireFromHere = createRequire(import.meta.url);
 
 const ALLOWED_EVENTS = new Set(["Notification", "Stop", "StopFailure", "SubagentStop"]);
 
+const SETTINGS_FILE = join(homedir(), ".claude", "settings.json");
+
+const DEFAULT_OPTIONS = {
+  language: "auto",
+  events_notification: true,
+  events_stop: true,
+  events_stopFailure: true,
+  events_subagentStop: false,
+  sound: true,
+  debug: false,
+};
+
+function loadOptions() {
+  try {
+    if (!existsSync(SETTINGS_FILE)) return { ...DEFAULT_OPTIONS };
+    const raw = readFileSync(SETTINGS_FILE, { encoding: "utf8" });
+    if (raw.trim().length === 0) return { ...DEFAULT_OPTIONS };
+    const parsed = JSON.parse(raw);
+    const entry = parsed?.pluginConfigs?.ringly?.options ?? {};
+    return { ...DEFAULT_OPTIONS, ...entry };
+  } catch {
+    return { ...DEFAULT_OPTIONS };
+  }
+}
+
+const OPTIONS = loadOptions();
+
 const debugEnabled =
   process.env["RINGLY_DEBUG"] === "1" ||
-  process.env["CLAUDE_PLUGIN_OPTION_DEBUG"] === "true";
+  process.env["CLAUDE_PLUGIN_OPTION_DEBUG"] === "true" ||
+  OPTIONS.debug === true;
 
 function debugLog(msg) {
   if (!debugEnabled) return;
@@ -21,6 +51,21 @@ function debugLog(msg) {
     appendFileSync(file, `[${new Date().toISOString()}] ${msg}\n`, { encoding: "utf8" });
   } catch {
     /* silent */
+  }
+}
+
+function eventEnabled(event) {
+  switch (event) {
+    case "Notification":
+      return OPTIONS.events_notification !== false;
+    case "Stop":
+      return OPTIONS.events_stop !== false;
+    case "StopFailure":
+      return OPTIONS.events_stopFailure !== false;
+    case "SubagentStop":
+      return OPTIONS.events_subagentStop === true;
+    default:
+      return false;
   }
 }
 
@@ -60,17 +105,57 @@ function pickEvent() {
 }
 
 function findNodeModuleEntry() {
+  const candidates = [];
   try {
-    const require = createRequire(import.meta.url);
-    return require.resolve("ringly/hook");
+    candidates.push(() => requireFromHere.resolve("ringly/hook"));
   } catch {
-    return null;
+    /* ignore */
   }
+  try {
+    const globalRoot = resolveGlobalNpmRoot();
+    if (globalRoot) {
+      const candidatePath = join(globalRoot, "ringly", "dist", "hook.js");
+      candidates.push(() => (existsSync(candidatePath) ? candidatePath : null));
+    }
+  } catch {
+    /* ignore */
+  }
+  for (const fn of candidates) {
+    try {
+      const resolved = fn();
+      if (resolved) return resolved;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
+function resolveGlobalNpmRoot() {
+  try {
+    const result = nodeSpawnSync("npm", ["root", "-g"], {
+      encoding: "utf8",
+      shell: process.platform === "win32",
+      windowsHide: true,
+      timeout: 5000,
+    });
+    if (result && result.stdout) {
+      const line = result.stdout.split(/\r?\n/).find((l) => l.trim().length > 0);
+      return line ? line.trim() : null;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 async function tryNodeModule(forcedEvent, rawStdin) {
   const entry = findNodeModuleEntry();
-  if (!entry) return false;
+  if (!entry) {
+    debugLog("Node module entry not found");
+    return false;
+  }
+  debugLog(`Node module entry: ${entry}`);
   return await spawnNode([entry, forcedEvent], rawStdin, "module");
 }
 
@@ -153,12 +238,17 @@ async function tryCliBinary(forcedEvent, rawStdin) {
     debugLog("CLI binary not found in PATH");
     return false;
   }
+  debugLog(`CLI binary: ${binaryPath}`);
+  const isCmdScript =
+    process.platform === "win32" &&
+    /\.(cmd|bat)$/i.test(binaryPath);
   return await new Promise((resolve) => {
     let child;
     try {
       child = spawn(binaryPath, ["hook", forcedEvent], {
         stdio: ["pipe", "ignore", "pipe"],
         windowsHide: true,
+        shell: isCmdScript,
       });
     } catch (err) {
       debugLog(`spawn failed: ${err?.message ?? err}`);
@@ -169,12 +259,24 @@ async function tryCliBinary(forcedEvent, rawStdin) {
     child.stderr?.on("data", (chunk) => {
       stderr += chunk.toString("utf8");
     });
+    const timer = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
+      debugLog("CLI timed out");
+      resolve(false);
+    }, 10000);
     child.on("error", (err) => {
+      clearTimeout(timer);
       debugLog(`CLI spawn error: ${err.message}`);
       resolve(false);
     });
     child.on("close", (code) => {
+      clearTimeout(timer);
       if (code === 0) {
+        debugLog("CLI OK");
         resolve(true);
       } else {
         debugLog(`CLI exited code=${code} stderr=${stderr}`);
@@ -213,9 +315,19 @@ const EMBEDDED_TRANSLATIONS = {
 };
 
 function detectLanguage() {
-  const explicit = process.env["CLAUDE_PLUGIN_OPTION_LANGUAGE"];
-  if (explicit === "pt-BR" || explicit === "en-US") return explicit;
-  const candidates = [process.env["LANG"], process.env["LANGUAGE"]].filter(Boolean);
+  const fromSettings = OPTIONS.language;
+  if (fromSettings === "pt-BR" || fromSettings === "en-US") return fromSettings;
+  if (fromSettings && fromSettings !== "auto") {
+    const v = String(fromSettings).toLowerCase();
+    if (v.startsWith("pt")) return "pt-BR";
+    if (v.startsWith("en")) return "en-US";
+  }
+  const candidates = [
+    process.env["LANG"],
+    process.env["LANGUAGE"],
+    process.env["LC_ALL"],
+    process.env["LC_MESSAGES"],
+  ].filter(Boolean);
   for (const value of candidates) {
     const v = value.toLowerCase();
     if (v.startsWith("pt")) return "pt-BR";
@@ -299,7 +411,9 @@ function buildEmbeddedToast(event, payload) {
   const project = extractProjectName(payload?.cwd);
   if (project) body = `${project}: ${body}`;
 
-  return { title: escapeXml(title), body: escapeXml(body), sound };
+  const silent = OPTIONS.sound === false;
+
+  return { title: escapeXml(title), body: escapeXml(body), sound, silent };
 }
 
 function extractProjectName(cwd) {
@@ -319,10 +433,14 @@ async function runEmbeddedToast(event, payload) {
     return;
   }
 
-  const { title, body, sound } = buildEmbeddedToast(event, payload);
+  const { title, body, sound, silent } = buildEmbeddedToast(event, payload);
   const appId = "Claude.Code.CLI";
 
-  const toastXml = `<toast><visual><binding template="ToastGeneric"><text>${title}</text><text>${body}</text></binding></visual><audio src="ms-winsoundevent:${sound}"/></toast>`;
+  const audioTag = silent
+    ? '<audio silent="true"/>'
+    : `<audio src="ms-winsoundevent:${sound}"/>`;
+
+  const toastXml = `<toast><visual><binding template="ToastGeneric"><text>${title}</text><text>${body}</text></binding></visual>${audioTag}</toast>`;
 
   const script = `
 $ErrorActionPreference = 'SilentlyContinue'
@@ -376,7 +494,7 @@ exit 0
       resolve();
     });
   });
-  debugLog("Embedded toast dispatched");
+  debugLog(`Embedded toast dispatched (lang=${detectLanguage()}, silent=${silent})`);
 }
 
 async function main() {
@@ -388,7 +506,12 @@ async function main() {
     return;
   }
 
-  debugLog(`Event=${event}, stdinBytes=${rawStdin.length}`);
+  debugLog(`Event=${event}, stdinBytes=${rawStdin.length}, opts=${JSON.stringify(OPTIONS)}`);
+
+  if (!eventEnabled(event)) {
+    debugLog(`Event ${event} disabled by user settings; skipping`);
+    return;
+  }
 
   if (await tryNodeModule(event, rawStdin)) return;
   if (await tryCliBinary(event, rawStdin)) return;

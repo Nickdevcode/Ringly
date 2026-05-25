@@ -1,5 +1,6 @@
 import { Box, Text, useInput } from "ink";
 import { type FC, useState } from "react";
+import type { Translator } from "../../core/translator.js";
 import { Footer } from "../components/Footer.js";
 import { Header } from "../components/Header.js";
 
@@ -11,6 +12,7 @@ export interface EventToggles {
 }
 
 export interface HookPickerProps {
+  translator: Translator;
   initial: EventToggles;
   onSubmit: (toggles: EventToggles) => void;
 }
@@ -18,38 +20,38 @@ export interface HookPickerProps {
 interface Item {
   key: keyof EventToggles;
   icon: string;
-  label: string;
-  description: string;
+  labelKey: string;
+  descKey: string;
 }
 
 const ITEMS: readonly Item[] = [
   {
     key: "notification",
     icon: "🔔",
-    label: "Permission / input requests",
-    description: "Notify when Claude needs your attention",
+    labelKey: "tui.events.notification.label",
+    descKey: "tui.events.notification.desc",
   },
   {
     key: "stop",
     icon: "✅",
-    label: "Task complete",
-    description: "Notify when Claude finishes a response",
+    labelKey: "tui.events.stop.label",
+    descKey: "tui.events.stop.desc",
   },
   {
     key: "stopFailure",
     icon: "⚠️ ",
-    label: "API errors",
-    description: "Notify when an API error ends the session",
+    labelKey: "tui.events.stopFailure.label",
+    descKey: "tui.events.stopFailure.desc",
   },
   {
     key: "subagentStop",
     icon: "🤖",
-    label: "Subagent finished",
-    description: "Notify when a subagent completes (off by default)",
+    labelKey: "tui.events.subagentStop.label",
+    descKey: "tui.events.subagentStop.desc",
   },
 ];
 
-export const HookPicker: FC<HookPickerProps> = ({ initial, onSubmit }) => {
+export const HookPicker: FC<HookPickerProps> = ({ translator, initial, onSubmit }) => {
   const [toggles, setToggles] = useState<EventToggles>(initial);
   const [cursor, setCursor] = useState(0);
 
@@ -76,10 +78,14 @@ export const HookPicker: FC<HookPickerProps> = ({ initial, onSubmit }) => {
   return (
     <Box flexDirection="column">
       <Header
+        translator={translator}
         step={2}
         totalSteps={4}
-        title="Choose which events should notify you"
-        subtitle={`${enabledCount} of ${ITEMS.length} enabled`}
+        title={translator.t("tui.events.title")}
+        subtitle={translator.t("tui.events.subtitle", {
+          enabled: enabledCount,
+          total: ITEMS.length,
+        })}
       />
 
       <Box flexDirection="column" paddingLeft={2}>
@@ -89,6 +95,8 @@ export const HookPicker: FC<HookPickerProps> = ({ initial, onSubmit }) => {
           const checkbox = checked ? "◉" : "◯";
           const checkboxColor = checked ? "green" : "gray";
           const cursorMark = active ? "›" : " ";
+          const label = translator.t(item.labelKey);
+          const description = translator.t(item.descKey);
 
           return (
             <Box key={item.key} flexDirection="row" gap={1}>
@@ -103,12 +111,12 @@ export const HookPicker: FC<HookPickerProps> = ({ initial, onSubmit }) => {
               <Text>{item.icon}</Text>
               {active ? (
                 <Text bold color="cyan">
-                  {item.label}
+                  {label}
                 </Text>
               ) : (
-                <Text>{item.label}</Text>
+                <Text>{label}</Text>
               )}
-              <Text dimColor>— {item.description}</Text>
+              <Text dimColor>— {description}</Text>
             </Box>
           );
         })}
@@ -116,9 +124,9 @@ export const HookPicker: FC<HookPickerProps> = ({ initial, onSubmit }) => {
 
       <Footer
         hints={[
-          { key: "↑/↓", label: "move" },
-          { key: "Space", label: "toggle" },
-          { key: "Enter", label: "confirm" },
+          { key: "↑/↓", label: translator.t("tui.footer.move") },
+          { key: "Space", label: translator.t("tui.footer.toggle") },
+          { key: "Enter", label: translator.t("tui.footer.confirm") },
         ]}
       />
     </Box>

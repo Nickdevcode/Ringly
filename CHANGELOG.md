@@ -5,11 +5,22 @@
 
 ---
 
-## [Unreleased]
+## [0.2.1] — 2026-05-25
 
 ### 🇧🇷 Português
 
 **Mudanças importantes**
+
+- **Internacionalização completa da TUI e dos comandos CLI.** Antes, várias strings da interface (Welcome, LanguagePicker, HookPicker, SoundDebugPicker, AumidRegister, Done, ConfigDone) e dos comandos `doctor`, `uninstall`, `test`, `init --non-interactive` estavam hardcoded em inglês. Agora **toda a interface respeita o idioma escolhido** (pt-BR ou en-US). Durante o `ringly init`, a TUI sempre **começa em inglês** (decisão de design para apresentar uma interface previsível a qualquer usuário); assim que o usuário escolhe um idioma no LanguagePicker, **todas as telas seguintes mudam na hora**. Os comandos não-interativos leem o idioma da config salva e renderizam tudo no idioma correto.
+- **Hooks agora leem `~/.claude/settings.json` diretamente.** Em todas as versões anteriores, o `dispatch.mjs` dependia de variáveis de ambiente `CLAUDE_PLUGIN_OPTION_*` que o Claude Code **não exporta** para hooks. Isso fazia com que toggles de idioma, eventos e som configurados pelo plugin manager fossem **silenciosamente ignorados**, e o fallback caía no `LANG` do SO (resultando, no Brasil, em notificações sempre em pt-BR mesmo com `en-US` selecionado). A v0.2.1 lê o `settings.json` diretamente em cada disparo, garantindo que toda configuração — idioma, eventos habilitados/desabilitados, som — funcione de fato.
+- **Filtro de eventos agora é respeitado em todos os caminhos.** Antes, desligar `events_stop` via TUI/plugin manager não impedia que o `dispatch.mjs` continuasse disparando o fallback embedded — apenas o caminho "rico" (CLI Node) filtrava. Agora o filtro é aplicado **antes** de qualquer dispatch, em todos os caminhos.
+- **`sound: false` agora silencia o fallback embedded.** O toast XML passa a usar `<audio silent="true"/>` quando o usuário desliga o som via `settings.json`. Antes, o som tocava mesmo com a config off.
+- **Spawn `EINVAL` no Windows corrigido** no `tryCliBinary`: arquivos `.cmd`/`.bat` agora são executados com `shell: true`, permitindo que o caminho "rico" do CLI funcione no Windows. Antes, sempre caía no fallback embedded.
+- **`tryNodeModule` agora tenta também o `npm root -g`** como segunda estratégia de resolução. Isso permite que o módulo `ringly/hook` seja encontrado mesmo quando o plugin está instalado em `~/.claude/plugins/cache/` (que não tem `node_modules`).
+- **`loadConfig()` do CLI** agora prioriza `~/.claude/settings.json` sobre o `config.json` antigo do env-paths. O `config.json` continua sendo lido como fallback para instalações pré-0.2.x e ainda é escrito (junto com o `settings.json`) por compatibilidade. Em uma versão futura ele será removido.
+- **`ringly test` sem `--lang`** agora respeita a config real do usuário (lendo do `settings.json`), em vez de sempre usar os defaults internos.
+
+**Mudanças importantes (v0.2.0)**
 
 - **`ringly config` agora escreve no `settings.json` do Claude Code** (em `pluginConfigs.ringly.options`) em vez do antigo `config.json` local. Isso corrige o bug em que mudar a config pelo CLI não refletia nas notificações reais, pois o plugin manager do Claude Code é a fonte de verdade. Backup automático com timestamp é criado antes de sobrescrever. A tela final agora avisa para rodar `/reload-plugins` no Claude Code.
 - **Novo módulo `claudeSettings.ts`** abstrai leitura/escrita do `~/.claude/settings.json` com merge seguro (preserva `theme`, `hooks`, outros plugins, etc.).
@@ -57,7 +68,18 @@
 
 ### 🇺🇸 English
 
-**Breaking changes**
+**Major fixes (v0.2.1)**
+
+- **Full TUI and CLI internationalization.** Previously, several interface strings (Welcome, LanguagePicker, HookPicker, SoundDebugPicker, AumidRegister, Done, ConfigDone) and the `doctor`, `uninstall`, `test`, `init --non-interactive` commands were hardcoded in English. Now **the entire interface respects the chosen language** (pt-BR or en-US). During `ringly init`, the TUI always **starts in English** (design choice — every user gets a predictable starting point); the moment a language is selected on the LanguagePicker, **every subsequent screen switches on the fly**. Non-interactive commands read the saved language and render everything in the right language.
+- **Hooks now read `~/.claude/settings.json` directly.** Every previous release had `dispatch.mjs` depend on `CLAUDE_PLUGIN_OPTION_*` environment variables that Claude Code **does not export** to hooks. That meant language, event, and sound toggles configured through the plugin manager were **silently ignored**, and the fallback ended up reading `LANG` from the OS (so Brazilian users always got pt-BR notifications even with `en-US` selected). v0.2.1 reads `settings.json` directly on every dispatch, so every config — language, enabled events, sound — actually works.
+- **Event filter now respected on every path.** Previously, disabling `events_stop` from the TUI/plugin manager didn't stop `dispatch.mjs` from firing the embedded fallback — only the "rich" Node CLI path filtered. The filter now runs **before** any dispatch, on every path.
+- **`sound: false` now silences the embedded fallback.** The toast XML now uses `<audio silent="true"/>` when the user disables sound via `settings.json`. Before, sound played anyway.
+- **Windows `EINVAL` spawn fix** in `tryCliBinary`: `.cmd`/`.bat` files now run with `shell: true`, letting the rich CLI path actually work on Windows. Before, it always fell back to embedded.
+- **`tryNodeModule` now also tries `npm root -g`** as a second resolution strategy, so `ringly/hook` is found even when the plugin lives in `~/.claude/plugins/cache/` (which has no `node_modules`).
+- **CLI `loadConfig()`** now prefers `~/.claude/settings.json` over the legacy env-paths `config.json`. The local `config.json` is still read as a fallback for pre-0.2.x installs and is still written (alongside `settings.json`) for compatibility. It will be removed in a future release.
+- **`ringly test` without `--lang`** now uses the user's actual config (from `settings.json`), instead of always falling back to internal defaults.
+
+**Breaking changes (v0.2.0)**
 
 - **`ringly config` now writes to Claude Code's `settings.json`** (under `pluginConfigs.ringly.options`) instead of the old local `config.json`. This fixes the bug where changing the config via the CLI didn't reflect in real notifications, because the Claude Code plugin manager is the source of truth. An automatic timestamped backup is created before overwriting. The final screen now reminds you to run `/reload-plugins` inside Claude Code.
 - **New `claudeSettings.ts` module** abstracts reading/writing `~/.claude/settings.json` with safe merging (preserves `theme`, `hooks`, other plugins, etc.).
@@ -169,5 +191,8 @@ First public release. Full Windows 11 support with pt-BR / en-US translation.
 
 ---
 
-[Unreleased]: https://github.com/nickdevcode/Ringly/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/nickdevcode/Ringly/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/nickdevcode/Ringly/releases/tag/v0.2.1
+[0.2.0]: https://github.com/nickdevcode/Ringly/releases/tag/v0.2.0
+[0.1.1]: https://github.com/nickdevcode/Ringly/releases/tag/v0.1.1
 [0.1.0]: https://github.com/nickdevcode/Ringly/releases/tag/v0.1.0

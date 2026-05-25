@@ -7,6 +7,7 @@ import React from "react";
 import { DEFAULT_CONFIG, loadConfig, saveConfig } from "../core/config.js";
 import { detectLegacy, disableLegacy } from "../core/legacy.js";
 import { logger } from "../core/logger.js";
+import { createTranslator, type Translator } from "../core/translator.js";
 import type { RinglyConfig } from "../core/types.js";
 import { DEFAULT_APP_ID } from "../core/types.js";
 import { detectPlatform } from "../platform/index.js";
@@ -42,35 +43,59 @@ export async function runInit(options: RunInitOptions = {}): Promise<void> {
   const platform = detectPlatform();
   const isWindows = platform === "windows";
 
+  /**
+   * O fluxo interativo (TUI) começa em inglês por design — só depois que
+   * o usuário escolhe o idioma é que as telas mudam. Já as mensagens
+   * "infra" (legacy detection, headless mode) tentam usar o idioma da
+   * config existente para não trocar de idioma no meio do `ringly init`
+   * de quem já é usuário do Ringly.
+   */
+  const existingConfig = (() => {
+    try {
+      return loadConfig();
+    } catch {
+      return null;
+    }
+  })();
+  const cliTranslator = createTranslator(existingConfig?.language ?? "auto");
+
   const detection = detectLegacy();
   const hasLegacy = detection.hooksFound.length > 0 || detection.scriptsFound.length > 0;
 
   if (hasLegacy) {
     if (options.migrateLegacy) {
-      runLegacyMigration();
+      runLegacyMigration(cliTranslator);
     } else {
       console.log("");
       console.log(
-        `  ${chalk.bold.yellow("⚠")}  ${chalk.bold.yellow("Legacy PowerShell hooks detected")}`,
+        `  ${chalk.bold.yellow("⚠")}  ${chalk.bold.yellow(cliTranslator.t("cli.init.legacy_detected"))}`,
       );
       if (detection.hooksFound.length > 0) {
-        console.log(chalk.dim(`     • hooks in settings.json: ${detection.hooksFound.join(", ")}`));
+        console.log(
+          chalk.dim(
+            `     • ${cliTranslator.t("cli.init.legacy_hooks", {
+              events: detection.hooksFound.join(", "),
+            })}`,
+          ),
+        );
       }
       if (detection.scriptsFound.length > 0) {
-        console.log(chalk.dim(`     • scripts on disk: ${detection.scriptsFound.join(", ")}`));
+        console.log(
+          chalk.dim(
+            `     • ${cliTranslator.t("cli.init.legacy_scripts", {
+              scripts: detection.scriptsFound.join(", "),
+            })}`,
+          ),
+        );
       }
-      console.log(
-        chalk.dim(
-          "     These will fire duplicate toasts alongside Ringly. To migrate now, re-run:",
-        ),
-      );
+      console.log(chalk.dim(`     ${cliTranslator.t("cli.init.legacy_warning")}`));
       console.log(`     ${chalk.cyan("ringly init --migrate-legacy")}`);
       console.log("");
     }
   }
 
   if (!process.stdout.isTTY || options.nonInteractive) {
-    await runNonInteractive(isWindows);
+    await runNonInteractive(cliTranslator, isWindows);
     return;
   }
 
@@ -112,8 +137,8 @@ export async function runInit(options: RunInitOptions = {}): Promise<void> {
  * aqui — para que cenários como Docker sem TTY ainda consigam configurar
  * o Ringly via flags.
  */
-async function runNonInteractive(isWindows: boolean): Promise<void> {
-  const title = "◉ Ringly init  ·  non-interactive";
+async function runNonInteractive(translator: Translator, isWindows: boolean): Promise<void> {
+  const title = `◉ ${translator.t("cli.init.header_noninteractive")}`;
   const border = "─".repeat(title.length + 2);
   console.log("");
   console.log(chalk.cyan(`╭${border}╮`));
@@ -123,19 +148,26 @@ async function runNonInteractive(isWindows: boolean): Promise<void> {
 
   const config = { ...DEFAULT_CONFIG };
   saveConfig(config);
-  console.log(`  ${chalk.green("✓")}  Default config saved`);
+  console.log(`  ${chalk.green("✓")}  ${translator.t("cli.init.default_saved")}`);
 
   let aumid: RegisterAumidResult | null = null;
   if (isWindows) {
     aumid = await registerAumid({ appId: DEFAULT_APP_ID });
-    if (aumid.ok) console.log(`  ${chalk.green("✓")}  AUMID registered`);
-    else console.log(`  ${chalk.yellow("⚠")}  AUMID skipped: ${aumid.reason ?? "unknown"}`);
+    if (aumid.ok) {
+      console.log(`  ${chalk.green("✓")}  ${translator.t("cli.init.aumid_registered")}`);
+    } else {
+      console.log(
+        `  ${chalk.yellow("⚠")}  ${translator.t("cli.init.aumid_skipped", {
+          reason: aumid.reason ?? "unknown",
+        })}`,
+      );
+    }
   }
 
   writeInstallLog(config, aumid);
 
   console.log("");
-  console.log(`  ${chalk.bold("Next steps inside Claude Code")}`);
+  console.log(`  ${chalk.bold(translator.t("cli.init.next_steps_in_claude"))}`);
   console.log(`    ${chalk.cyan(MARKETPLACE_COMMAND)}`);
   console.log(`    ${chalk.cyan(INSTALL_COMMAND)}`);
   console.log("");
@@ -147,28 +179,40 @@ async function runNonInteractive(isWindows: boolean): Promise<void> {
  * tela mas não interrompem o init — a ideia é que mesmo em caso de
  * falha parcial o usuário consiga prosseguir com a instalação nova.
  */
-function runLegacyMigration(): void {
+function runLegacyMigration(translator: Translator): void {
   console.log("");
-  console.log(`  ${chalk.bold.cyan("◉")} ${chalk.bold("Migrating legacy PowerShell hooks…")}`);
+  console.log(`  ${chalk.bold.cyan("◉")} ${chalk.bold(translator.t("cli.init.legacy_migrating"))}`);
   try {
     const result = disableLegacy();
     if (result.removedHooks.length > 0) {
-      console.log(`  ${chalk.green("✓")}  Removed legacy hooks: ${result.removedHooks.join(", ")}`);
+      console.log(
+        `  ${chalk.green("✓")}  ${translator.t("cli.init.legacy_removed", {
+          events: result.removedHooks.join(", "),
+        })}`,
+      );
       if (result.backupFile) {
         console.log(`     ${chalk.dim("↳ ")}${chalk.dim(`Backup: ${result.backupFile}`)}`);
       }
     }
     if (result.movedScripts.length > 0) {
-      console.log(`  ${chalk.green("✓")}  Archived scripts: ${result.movedScripts.join(", ")}`);
+      console.log(
+        `  ${chalk.green("✓")}  ${translator.t("cli.init.legacy_archived", {
+          scripts: result.movedScripts.join(", "),
+        })}`,
+      );
       if (result.backupDir) {
         console.log(`     ${chalk.dim("↳ ")}${chalk.dim(`Backup dir: ${result.backupDir}`)}`);
       }
     }
     if (result.removedHooks.length === 0 && result.movedScripts.length === 0) {
-      console.log(`  ${chalk.dim("·")}  Nothing to migrate`);
+      console.log(`  ${chalk.dim("·")}  ${translator.t("cli.init.legacy_nothing")}`);
     }
   } catch (err) {
-    console.log(`  ${chalk.red("✗")}  Migration failed: ${(err as Error).message}`);
+    console.log(
+      `  ${chalk.red("✗")}  ${translator.t("cli.init.legacy_failed", {
+        message: (err as Error).message,
+      })}`,
+    );
     logger.error("Legacy migration failed", { message: (err as Error).message });
   }
   console.log("");

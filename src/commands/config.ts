@@ -8,8 +8,9 @@ import {
   ringlyConfigToPluginOptions,
   writeRinglyPluginOptions,
 } from "../core/claudeSettings.js";
-import { DEFAULT_CONFIG } from "../core/config.js";
+import { DEFAULT_CONFIG, loadConfig } from "../core/config.js";
 import { logger } from "../core/logger.js";
+import { createTranslator } from "../core/translator.js";
 import { detectPlatform } from "../platform/index.js";
 import { App } from "../tui/App.js";
 
@@ -17,11 +18,18 @@ export async function runConfig(): Promise<void> {
   const platform = detectPlatform();
   const isWindows = platform === "windows";
 
+  const existingConfig = (() => {
+    try {
+      return loadConfig();
+    } catch {
+      return { ...DEFAULT_CONFIG };
+    }
+  })();
+  const translator = createTranslator(existingConfig.language);
+
   if (!process.stdout.isTTY) {
-    console.log(
-      chalk.yellow("`config` requires an interactive terminal. Pass settings via env vars or edit"),
-    );
-    console.log(chalk.yellow("the ~/.claude/settings.json file directly."));
+    console.log(chalk.yellow(translator.t("cli.config.requires_tty")));
+    console.log(chalk.yellow(translator.t("cli.config.requires_tty2")));
     return;
   }
 
@@ -53,7 +61,11 @@ export async function runConfig(): Promise<void> {
           } catch (err) {
             logger.error("Settings save failed", { message: (err as Error).message });
             console.log("");
-            console.log(`  ${chalk.red("✗")}  Failed to save settings: ${(err as Error).message}`);
+            console.log(
+              `  ${chalk.red("✗")}  ${translator.t("cli.config.save_failed", {
+                message: (err as Error).message,
+              })}`,
+            );
           }
         },
       }),

@@ -1,15 +1,22 @@
 import { Box, Text } from "ink";
 import type { FC } from "react";
+import type { Translator } from "../../core/translator.js";
 
 export interface HeaderProps {
+  translator?: Translator;
   step?: number;
   totalSteps?: number;
   title: string;
   subtitle?: string;
 }
 
-export const Header: FC<HeaderProps> = ({ step, totalSteps, title, subtitle }) => {
-  const stepLabel = step && totalSteps ? `Step ${step}/${totalSteps}` : null;
+export const Header: FC<HeaderProps> = ({ translator, step, totalSteps, title, subtitle }) => {
+  const stepLabel =
+    step && totalSteps
+      ? translator
+        ? translator.t("tui.header.step", { step, total: totalSteps })
+        : `Step ${step}/${totalSteps}`
+      : null;
 
   return (
     <Box flexDirection="column" marginBottom={1}>

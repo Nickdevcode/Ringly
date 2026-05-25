@@ -1,11 +1,17 @@
 import { Box, Text } from "ink";
 import type { FC } from "react";
+import type { Translator } from "../../core/translator.js";
 
 export interface ConfigDoneProps {
+  translator: Translator;
   settingsFile: string;
 }
 
-export const ConfigDone: FC<ConfigDoneProps> = ({ settingsFile }) => {
+export const ConfigDone: FC<ConfigDoneProps> = ({ translator, settingsFile }) => {
+  const reloadFirst = translator
+    .t("tui.config.reload_body", { command: "__CMD__" })
+    .split("__CMD__");
+
   return (
     <Box flexDirection="column" gap={1}>
       <Box
@@ -17,15 +23,16 @@ export const ConfigDone: FC<ConfigDoneProps> = ({ settingsFile }) => {
         gap={1}
       >
         <Text bold color="green">
-          ✓ Configuration saved
+          ✓ {translator.t("tui.config.saved")}
         </Text>
       </Box>
 
       <Box flexDirection="column" paddingLeft={2} gap={1}>
         <Text>
-          Written to <Text dimColor>{settingsFile || "~/.claude/settings.json"}</Text>
+          {translator.t("tui.config.written_to")}{" "}
+          <Text dimColor>{settingsFile || "~/.claude/settings.json"}</Text>
         </Text>
-        <Text dimColor>A timestamped backup of the previous file was created next to it.</Text>
+        <Text dimColor>{translator.t("tui.config.backup_created")}</Text>
       </Box>
 
       <Box
@@ -36,20 +43,22 @@ export const ConfigDone: FC<ConfigDoneProps> = ({ settingsFile }) => {
         flexDirection="column"
       >
         <Text bold color="yellow">
-          ⚠ Reload required
+          ⚠ {translator.t("tui.config.reload_required")}
         </Text>
         <Text>
-          Run <Text color="cyan">/reload-plugins</Text> inside Claude Code so the new
+          {reloadFirst[0]}
+          <Text color="cyan">/reload-plugins</Text>
+          {reloadFirst[1] ?? ""}
         </Text>
-        <Text>settings take effect immediately.</Text>
+        <Text>{translator.t("tui.config.reload_body2")}</Text>
       </Box>
 
       <Box flexDirection="column" paddingLeft={2}>
-        <Text dimColor>You can also change these settings any time via:</Text>
+        <Text dimColor>{translator.t("tui.config.also_available")}</Text>
         <Text>
           {" "}
           <Text color="cyan">/plugin</Text>
-          <Text dimColor> → Installed → Ringly → Configure</Text>
+          <Text dimColor> {translator.t("tui.config.plugin_path")}</Text>
         </Text>
       </Box>
     </Box>

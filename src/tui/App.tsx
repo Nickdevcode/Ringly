@@ -1,5 +1,6 @@
 import { Box, useApp } from "ink";
-import { type FC, useCallback, useState } from "react";
+import { type FC, useCallback, useMemo, useState } from "react";
+import { createTranslator } from "../core/translator.js";
 import type { LanguageSetting, RinglyConfig } from "../core/types.js";
 import type { RegisterAumidResult } from "../platform/windows/aumid.js";
 import { AumidRegister } from "./screens/AumidRegister.js";
@@ -37,7 +38,22 @@ export const App: FC<AppProps> = ({
 }) => {
   const { exit } = useApp();
   const [stage, setStage] = useState<Stage>(mode === "config" ? "language" : "welcome");
-  const [language, setLanguage] = useState<LanguageSetting>(initialConfig.language);
+
+  /**
+   * Durante o `init` a TUI começa sempre em inglês para apresentar uma
+   * interface previsível para qualquer usuário. Assim que ele escolhe o
+   * idioma no `LanguagePicker`, todas as telas seguintes (eventos, som,
+   * AUMID, done) já refletem a escolha em tempo real.
+   *
+   * Durante o `config`, faz sentido abrir já no idioma corrente do
+   * usuário, porque ele está só reconfigurando — não está sendo
+   * apresentado ao Ringly pela primeira vez.
+   */
+  const [language, setLanguage] = useState<LanguageSetting>(
+    mode === "init" ? "en-US" : initialConfig.language,
+  );
+  const translator = useMemo(() => createTranslator(language), [language]);
+
   const [events, setEvents] = useState<EventToggles>(initialConfig.events);
   const [soundDebug, setSoundDebug] = useState<SoundDebugValues>({
     sound: initialConfig.sound,
@@ -62,9 +78,12 @@ export const App: FC<AppProps> = ({
 
   return (
     <Box flexDirection="column" paddingX={1} paddingY={1}>
-      {stage === "welcome" && <Welcome onContinue={() => setStage("language")} />}
+      {stage === "welcome" && (
+        <Welcome translator={translator} onContinue={() => setStage("language")} />
+      )}
       {stage === "language" && (
         <LanguagePicker
+          translator={translator}
           onSelect={(value) => {
             setLanguage(value);
             setStage("events");
@@ -73,6 +92,7 @@ export const App: FC<AppProps> = ({
       )}
       {stage === "events" && (
         <HookPicker
+          translator={translator}
           initial={events}
           onSubmit={(values) => {
             setEvents(values);
@@ -82,6 +102,7 @@ export const App: FC<AppProps> = ({
       )}
       {stage === "sound" && (
         <SoundDebugPicker
+          translator={translator}
           initial={soundDebug}
           onSubmit={(values) => {
             setSoundDebug(values);
@@ -95,6 +116,7 @@ export const App: FC<AppProps> = ({
       )}
       {stage === "aumid" && registerAumidFn && (
         <AumidRegister
+          translator={translator}
           registerFn={registerAumidFn}
           onDone={(result) => {
             setAumid(result);
@@ -103,9 +125,15 @@ export const App: FC<AppProps> = ({
         />
       )}
       {stage === "done" && mode === "init" && marketplaceCommand && installCommand && (
-        <Done marketplaceCommand={marketplaceCommand} installCommand={installCommand} />
+        <Done
+          translator={translator}
+          marketplaceCommand={marketplaceCommand}
+          installCommand={installCommand}
+        />
       )}
-      {stage === "done" && mode === "config" && <ConfigDone settingsFile={settingsFile ?? ""} />}
+      {stage === "done" && mode === "config" && (
+        <ConfigDone translator={translator} settingsFile={settingsFile ?? ""} />
+      )}
     </Box>
   );
 };

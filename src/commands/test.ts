@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import { buildDefaultChannels, dispatchToChannels } from "../channels/index.js";
-import { DEFAULT_CONFIG } from "../core/config.js";
+import { DEFAULT_CONFIG, loadConfig } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { buildIntent } from "../core/notifier.js";
 import { createTranslator } from "../core/translator.js";
@@ -39,8 +39,19 @@ const SAMPLE_PAYLOADS: Record<ClaudeHookEventName, ClaudeHookPayload> = {
 };
 
 export async function runTest(options: RunTestOptions): Promise<void> {
-  const config = { ...DEFAULT_CONFIG, language: options.lang, sound: !options.silent };
-  const translator = createTranslator(options.lang);
+  const baseConfig = (() => {
+    try {
+      return loadConfig();
+    } catch {
+      return { ...DEFAULT_CONFIG };
+    }
+  })();
+
+  const effectiveLang: LanguageSetting =
+    options.lang === "auto" ? baseConfig.language : options.lang;
+
+  const config = { ...baseConfig, language: effectiveLang, sound: !options.silent };
+  const translator = createTranslator(effectiveLang);
   const payload = SAMPLE_PAYLOADS[options.event];
 
   let intent: NotificationIntent = buildIntent({
@@ -58,7 +69,7 @@ export async function runTest(options: RunTestOptions): Promise<void> {
     title: intent.title,
   });
 
-  const headerTitle = `◉ Ringly test  ·  ${options.event}  ·  ${translator.language}`;
+  const headerTitle = `◉ ${translator.t("cli.test.header")}  ·  ${options.event}  ·  ${translator.language}`;
   const border = "─".repeat(headerTitle.length + 2);
   console.log("");
   console.log(chalk.cyan(`╭${border}╮`));
@@ -66,16 +77,18 @@ export async function runTest(options: RunTestOptions): Promise<void> {
   console.log(chalk.cyan(`╰${border}╯`));
   console.log("");
 
-  console.log(`  ${chalk.dim(translator.t("test.intro"))}`);
+  console.log(`  ${chalk.dim(translator.t("cli.test.intro"))}`);
   console.log("");
-  console.log(`  ${chalk.bold("Title:")}  ${intent.title}`);
-  console.log(`  ${chalk.bold("Body: ")}  ${intent.body}`);
+  console.log(`  ${chalk.bold(translator.t("cli.test.title_label"))}  ${intent.title}`);
+  console.log(`  ${chalk.bold(translator.t("cli.test.body_label"))}  ${intent.body}`);
   console.log("");
 
   const channels = buildDefaultChannels({ appId: config.appId });
   await dispatchToChannels(intent, channels);
 
-  console.log(`  ${chalk.green("✓")}  ${translator.t("test.done")}`);
-  console.log(`  ${chalk.dim("Log:")} ${chalk.dim(logger.getLogFile())}`);
+  console.log(`  ${chalk.green("✓")}  ${translator.t("cli.test.done")}`);
+  console.log(
+    `  ${chalk.dim(translator.t("cli.test.log_label"))} ${chalk.dim(logger.getLogFile())}`,
+  );
   console.log("");
 }

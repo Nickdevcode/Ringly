@@ -1,6 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import envPaths from "env-paths";
+import {
+  hasRinglyPluginOptions,
+  pluginOptionsToRinglyConfig,
+  readRinglyPluginOptions,
+  ringlyConfigToPluginOptions,
+  writeRinglyPluginOptions,
+} from "./claudeSettings.js";
 import { logger } from "./logger.js";
 import { DEFAULT_APP_ID, type LanguageSetting, type RinglyConfig } from "./types.js";
 
@@ -28,7 +35,24 @@ export const DEFAULT_CONFIG: RinglyConfig = {
   appId: DEFAULT_APP_ID,
 };
 
+/**
+ * Carrega a config do Ringly. Desde a v0.2.1 a fonte primária é
+ * `~/.claude/settings.json` (chave `pluginConfigs.ringly.options`),
+ * mantendo o `config.json` antigo do env-paths apenas como fallback
+ * para instalações pré-0.2.x. Se nenhum dos dois existir, retorna defaults.
+ */
 export function loadConfig(): RinglyConfig {
+  if (hasRinglyPluginOptions()) {
+    try {
+      const opts = readRinglyPluginOptions();
+      return pluginOptionsToRinglyConfig(opts, DEFAULT_CONFIG);
+    } catch (err) {
+      logger.warn("Failed to read Claude settings; falling back to legacy config", {
+        message: (err as Error).message,
+      });
+    }
+  }
+
   const file = getConfigFile();
   if (!existsSync(file)) return { ...DEFAULT_CONFIG };
   try {
@@ -44,7 +68,21 @@ export function loadConfig(): RinglyConfig {
   }
 }
 
+/**
+ * Persiste a config do Ringly. Desde a v0.2.1 a fonte primária é
+ * `~/.claude/settings.json`. Mantemos também a escrita no `config.json`
+ * antigo para compatibilidade com integrações externas que possam ainda
+ * estar lendo dele (será removido em uma versão futura).
+ */
 export function saveConfig(config: RinglyConfig): void {
+  try {
+    writeRinglyPluginOptions(ringlyConfigToPluginOptions(config));
+  } catch (err) {
+    logger.warn("Failed to save to ~/.claude/settings.json", {
+      message: (err as Error).message,
+    });
+  }
+
   const file = getConfigFile();
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, { encoding: "utf8" });

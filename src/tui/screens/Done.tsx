@@ -1,12 +1,14 @@
 import { Box, Text } from "ink";
 import type { FC } from "react";
+import type { Translator } from "../../core/translator.js";
 
 export interface DoneProps {
+  translator: Translator;
   marketplaceCommand: string;
   installCommand: string;
 }
 
-export const Done: FC<DoneProps> = ({ marketplaceCommand, installCommand }) => {
+export const Done: FC<DoneProps> = ({ translator, marketplaceCommand, installCommand }) => {
   return (
     <Box flexDirection="column" gap={1}>
       <Box
@@ -18,16 +20,16 @@ export const Done: FC<DoneProps> = ({ marketplaceCommand, installCommand }) => {
         gap={1}
       >
         <Text bold color="green">
-          ✓ Ringly is ready
+          ✓ {translator.t("tui.done.ready")}
         </Text>
       </Box>
 
       <Box flexDirection="column" paddingLeft={2} gap={1}>
         <Text>
           <Text color="yellow" bold>
-            Final step:
+            {translator.t("tui.done.final_step")}
           </Text>{" "}
-          register the plugin inside Claude Code.
+          {translator.t("tui.done.final_step_body")}
         </Text>
 
         <Box flexDirection="column" gap={0} paddingLeft={2}>
@@ -50,23 +52,23 @@ export const Done: FC<DoneProps> = ({ marketplaceCommand, installCommand }) => {
         flexDirection="column"
         marginTop={1}
       >
-        <Text dimColor>Useful commands:</Text>
+        <Text dimColor>{translator.t("tui.done.useful_commands")}</Text>
         <Box flexDirection="row" gap={2} marginTop={0}>
           <Text>
             <Text color="cyan">ringly doctor</Text>
-            <Text dimColor> verify the setup</Text>
+            <Text dimColor> {translator.t("tui.done.cmd_doctor")}</Text>
           </Text>
         </Box>
         <Box flexDirection="row" gap={2}>
           <Text>
             <Text color="cyan">ringly config</Text>
-            <Text dimColor> change settings</Text>
+            <Text dimColor> {translator.t("tui.done.cmd_config")}</Text>
           </Text>
         </Box>
         <Box flexDirection="row" gap={2}>
           <Text>
             <Text color="cyan">ringly test</Text>
-            <Text dimColor> fire a sample notification</Text>
+            <Text dimColor> {translator.t("tui.done.cmd_test")}</Text>
           </Text>
         </Box>
       </Box>

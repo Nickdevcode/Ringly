@@ -4,6 +4,7 @@ import { getClaudeSettingsFile, readRinglyPluginOptions } from "../core/claudeSe
 import { getConfigFile, loadConfig } from "../core/config.js";
 import { detectLegacy } from "../core/legacy.js";
 import { logger } from "../core/logger.js";
+import { createTranslator, type Translator } from "../core/translator.js";
 import { detectPlatform } from "../platform/index.js";
 import {
   defaultShortcutPath,
@@ -26,130 +27,161 @@ export interface RunDoctorOptions {
 }
 
 export async function runDoctor(options: RunDoctorOptions = {}): Promise<void> {
+  const config = (() => {
+    try {
+      return loadConfig();
+    } catch {
+      return null;
+    }
+  })();
+  const translator = createTranslator(config?.language ?? "auto");
+
   const checks: CheckResult[] = [];
 
-  checks.push(checkNode());
-  checks.push(checkPlatform());
+  checks.push(checkNode(translator));
+  checks.push(checkPlatform(translator));
 
   const platform = detectPlatform();
   if (platform === "windows") {
-    checks.push(await checkPowerShell());
-    checks.push(checkClaudeExecutable());
-    checks.push(await checkAumid());
+    checks.push(await checkPowerShell(translator));
+    checks.push(checkClaudeExecutable(translator));
+    checks.push(await checkAumid(translator));
   } else {
     checks.push({
-      label: "Native toast back-end",
+      label: translator.t("cli.doctor.check.platform"),
       level: "warn",
-      detail: `${platform} support is scaffolded but not implemented yet`,
-      hint: "Star the GitHub repo to be notified when macOS / Linux land.",
+      detail: translator.t("cli.doctor.check.platform.scaffolded", { platform }),
+      hint: translator.t("cli.doctor.check.platform.star_hint"),
     });
   }
 
-  checks.push(checkPluginOptions());
-  checks.push(checkConfigFile());
-  checks.push(checkLegacy());
+  checks.push(checkPluginOptions(translator));
+  checks.push(checkConfigFile(translator));
+  checks.push(checkLegacy(translator));
 
   if (options.json) {
     console.log(JSON.stringify({ platform, checks }, null, 2));
     return;
   }
 
-  printReport(platform, checks);
+  printReport(translator, platform, checks);
 
   const hasFail = checks.some((c) => c.level === "fail");
   process.exitCode = hasFail ? 1 : 0;
 }
 
-function checkNode(): CheckResult {
+function checkNode(translator: Translator): CheckResult {
   const version = process.versions.node;
   const major = Number.parseInt(version.split(".")[0] ?? "0", 10);
   if (major >= 20) {
-    return { label: "Node.js version", level: "ok", detail: `v${version}` };
-  }
-  return {
-    label: "Node.js version",
-    level: "fail",
-    detail: `v${version}`,
-    hint: "Node 20 or newer is required. Upgrade from nodejs.org or via nvm/volta.",
-  };
-}
-
-function checkPlatform(): CheckResult {
-  const platform = detectPlatform();
-  if (platform === "windows") {
-    return { label: "Operating system", level: "ok", detail: "Windows" };
-  }
-  if (platform === "unknown") {
     return {
-      label: "Operating system",
-      level: "fail",
-      detail: process.platform,
-      hint: "Ringly currently supports Windows only.",
+      label: translator.t("cli.doctor.check.node"),
+      level: "ok",
+      detail: `v${version}`,
     };
   }
   return {
-    label: "Operating system",
-    level: "warn",
-    detail: platform,
-    hint: "Native toast on this platform will arrive in a future release.",
+    label: translator.t("cli.doctor.check.node"),
+    level: "fail",
+    detail: `v${version}`,
+    hint: translator.t("cli.doctor.check.node.hint"),
   };
 }
 
-async function checkPowerShell(): Promise<CheckResult> {
+function checkPlatform(translator: Translator): CheckResult {
+  const platform = detectPlatform();
+  if (platform === "windows") {
+    return {
+      label: translator.t("cli.doctor.check.platform"),
+      level: "ok",
+      detail: "Windows",
+    };
+  }
+  if (platform === "unknown") {
+    return {
+      label: translator.t("cli.doctor.check.platform"),
+      level: "fail",
+      detail: process.platform,
+      hint: translator.t("cli.doctor.check.platform.unsupported_hint"),
+    };
+  }
+  return {
+    label: translator.t("cli.doctor.check.platform"),
+    level: "warn",
+    detail: platform,
+    hint: translator.t("cli.doctor.check.platform.future_hint"),
+  };
+}
+
+async function checkPowerShell(translator: Translator): Promise<CheckResult> {
   const script = "$PSVersionTable.PSVersion.ToString()";
   const result = await runPowerShell({ script, timeoutMs: 5000 });
   if (result.ok && result.stdout) {
     const firstLine = result.stdout.split("\n")[0] ?? result.stdout;
-    return { label: "PowerShell", level: "ok", detail: firstLine };
+    return {
+      label: translator.t("cli.doctor.check.powershell"),
+      level: "ok",
+      detail: firstLine,
+    };
   }
   return {
-    label: "PowerShell",
+    label: translator.t("cli.doctor.check.powershell"),
     level: "fail",
-    detail: result.stderr || "PowerShell not reachable",
-    hint: "Make sure powershell.exe is on the PATH.",
+    detail: result.stderr || translator.t("cli.doctor.check.powershell.unreachable"),
+    hint: translator.t("cli.doctor.check.powershell.hint"),
   };
 }
 
-function checkClaudeExecutable(): CheckResult {
+function checkClaudeExecutable(translator: Translator): CheckResult {
   const path = detectClaudeExecutable();
   if (path) {
-    return { label: "Claude Code executable", level: "ok", detail: path };
+    return {
+      label: translator.t("cli.doctor.check.claude"),
+      level: "ok",
+      detail: path,
+    };
   }
   return {
-    label: "Claude Code executable",
+    label: translator.t("cli.doctor.check.claude"),
     level: "warn",
-    detail: "not found",
-    hint: "The AUMID will use a fallback target. Run `ringly init --force` after installing Claude Code.",
+    detail: translator.t("cli.doctor.check.claude.notfound"),
+    hint: translator.t("cli.doctor.check.claude.hint", { command: "`ringly init --force`" }),
   };
 }
 
-async function checkAumid(): Promise<CheckResult> {
+async function checkAumid(translator: Translator): Promise<CheckResult> {
   const shortcut = defaultShortcutPath();
   if (!existsSync(shortcut)) {
     return {
-      label: "Windows AUMID",
+      label: translator.t("cli.doctor.check.aumid"),
       level: "fail",
-      detail: "not registered",
-      hint: "Run `ringly init` to register the Start Menu shortcut and AUMID.",
+      detail: translator.t("cli.doctor.check.aumid.notreg"),
+      hint: translator.t("cli.doctor.check.aumid.notreg_hint", { command: "`ringly init`" }),
     };
   }
   const status = await queryAumidStatus(shortcut);
   if (status.aumid === "Claude.Code.CLI") {
-    return { label: "Windows AUMID", level: "ok", detail: status.aumid };
+    return {
+      label: translator.t("cli.doctor.check.aumid"),
+      level: "ok",
+      detail: status.aumid,
+    };
   }
   if (status.aumid) {
     return {
-      label: "Windows AUMID",
+      label: translator.t("cli.doctor.check.aumid"),
       level: "warn",
       detail: status.aumid,
-      hint: "AUMID exists but does not match the expected value. Run `ringly init --force`.",
+      hint: translator.t("cli.doctor.check.aumid.mismatch_hint", {
+        command: "`ringly init --force`",
+      }),
     };
   }
   return {
-    label: "Windows AUMID",
+    label: translator.t("cli.doctor.check.aumid"),
     level: "fail",
-    detail: status.error || "missing property",
-    hint: "Run `ringly init --force` to repair the AUMID.",
+    detail: status.error || translator.t("cli.doctor.check.aumid.missing"),
+    hint: translator.t("cli.doctor.check.aumid.repair_hint", { command: "`ringly init --force`" }),
   };
 }
 
@@ -159,89 +191,104 @@ async function checkAumid(): Promise<CheckResult> {
  * **duas** notificações pro mesmo evento. Aqui informamos o estado e
  * sugerimos o comando de migração.
  */
-function checkLegacy(): CheckResult {
+function checkLegacy(translator: Translator): CheckResult {
   const detection = detectLegacy();
   const hooksCount = detection.hooksFound.length;
   const scriptsCount = detection.scriptsFound.length;
 
   if (hooksCount === 0 && scriptsCount === 0) {
-    return { label: "Legacy PowerShell hooks", level: "ok", detail: "none detected" };
+    return {
+      label: translator.t("cli.doctor.check.legacy"),
+      level: "ok",
+      detail: translator.t("cli.doctor.check.legacy.none"),
+    };
   }
 
   const parts: string[] = [];
   if (hooksCount > 0) parts.push(`${hooksCount} hook(s): ${detection.hooksFound.join(", ")}`);
-  if (scriptsCount > 0) parts.push(`${scriptsCount} script(s) on disk`);
+  if (scriptsCount > 0) parts.push(`${scriptsCount} script(s)`);
 
   return {
-    label: "Legacy PowerShell hooks",
+    label: translator.t("cli.doctor.check.legacy"),
     level: "warn",
     detail: parts.join(" + "),
-    hint: "Run `ringly uninstall --legacy` to migrate (backup is created automatically).",
+    hint: translator.t("cli.doctor.check.legacy.hint", {
+      command: "`ringly uninstall --legacy`",
+    }),
   };
 }
 
-function checkPluginOptions(): CheckResult {
+function checkPluginOptions(translator: Translator): CheckResult {
   const file = getClaudeSettingsFile();
   if (!existsSync(file)) {
     return {
-      label: "Claude Code plugin settings",
+      label: translator.t("cli.doctor.check.plugin"),
       level: "warn",
-      detail: `${file} not found`,
-      hint: "Open `/plugin` in Claude Code → Installed → Ringly → Configure, or run `ringly config`.",
+      detail: translator.t("cli.doctor.check.plugin.notfound", { file }),
+      hint: translator.t("cli.doctor.check.plugin.notfound_hint", {
+        plugin: "`/plugin`",
+        command: "`ringly config`",
+      }),
     };
   }
   const options = readRinglyPluginOptions();
   const definedKeys = Object.keys(options);
   if (definedKeys.length === 0) {
     return {
-      label: "Claude Code plugin settings",
+      label: translator.t("cli.doctor.check.plugin"),
       level: "warn",
-      detail: "no plugin options set (using built-in defaults)",
-      hint: "Configure via `/plugin` in Claude Code or run `ringly config`.",
+      detail: translator.t("cli.doctor.check.plugin.nooptions"),
+      hint: translator.t("cli.doctor.check.plugin.nooptions_hint", {
+        plugin: "`/plugin`",
+        command: "`ringly config`",
+      }),
     };
   }
   const language = options.language ?? "(default)";
   return {
-    label: "Claude Code plugin settings",
+    label: translator.t("cli.doctor.check.plugin"),
     level: "ok",
-    detail: `${definedKeys.length} option(s) set · language: ${language}`,
+    detail: translator.t("cli.doctor.check.plugin.ok", {
+      count: definedKeys.length,
+      language,
+    }),
   };
 }
 
-function checkConfigFile(): CheckResult {
+function checkConfigFile(translator: Translator): CheckResult {
   const file = getConfigFile();
   const exists = existsSync(file);
   if (!exists) {
     return {
-      label: "Local configuration fallback",
+      label: translator.t("cli.doctor.check.config"),
       level: "ok",
-      detail: "not present (plugin settings take precedence)",
+      detail: translator.t("cli.doctor.check.config.absent"),
     };
   }
   try {
     const config = loadConfig();
     return {
-      label: "Local configuration fallback",
+      label: translator.t("cli.doctor.check.config"),
       level: "ok",
-      detail: `${file} (language: ${config.language})`,
+      detail: translator.t("cli.doctor.check.config.ok", { file, language: config.language }),
     };
   } catch (err) {
     return {
-      label: "Local configuration fallback",
+      label: translator.t("cli.doctor.check.config"),
       level: "fail",
       detail: (err as Error).message,
-      hint: "Fix or delete the config file and re-run `ringly init`.",
+      hint: translator.t("cli.doctor.check.config.broken_hint", { command: "`ringly init`" }),
     };
   }
 }
 
-function printReport(platform: string, checks: CheckResult[]): void {
+function printReport(translator: Translator, platform: string, checks: CheckResult[]): void {
   const okCount = checks.filter((c) => c.level === "ok").length;
   const warnCount = checks.filter((c) => c.level === "warn").length;
   const failCount = checks.filter((c) => c.level === "fail").length;
   const total = checks.length;
 
-  const headerLine = `◉ Ringly diagnostics  ·  ${platform}  ·  ${okCount}/${total} OK`;
+  const headerLine = `◉ ${translator.t("cli.doctor.header")}  ·  ${platform}  ·  ${okCount}/${total} OK`;
   const border = "─".repeat(headerLine.length + 2);
 
   console.log("");
@@ -265,10 +312,24 @@ function printReport(platform: string, checks: CheckResult[]): void {
 
   console.log("");
   const summary: string[] = [];
-  if (okCount > 0) summary.push(chalk.green(`${okCount} passed`));
-  if (warnCount > 0) summary.push(chalk.yellow(`${warnCount} warning${warnCount > 1 ? "s" : ""}`));
-  if (failCount > 0) summary.push(chalk.red(`${failCount} failed`));
-  console.log(`  ${chalk.dim("Summary:")} ${summary.join(chalk.dim(" · "))}`);
-  console.log(`  ${chalk.dim("Log file:")} ${chalk.dim(logger.getLogFile())}`);
+  if (okCount > 0) summary.push(chalk.green(translator.t("cli.doctor.passed", { count: okCount })));
+  if (warnCount > 0) {
+    summary.push(
+      chalk.yellow(
+        translator.t(warnCount > 1 ? "cli.doctor.warnings" : "cli.doctor.warning", {
+          count: warnCount,
+        }),
+      ),
+    );
+  }
+  if (failCount > 0) {
+    summary.push(chalk.red(translator.t("cli.doctor.failed", { count: failCount })));
+  }
+  console.log(
+    `  ${chalk.dim(translator.t("cli.doctor.summary"))} ${summary.join(chalk.dim(" · "))}`,
+  );
+  console.log(
+    `  ${chalk.dim(translator.t("cli.doctor.log_file"))} ${chalk.dim(logger.getLogFile())}`,
+  );
   console.log("");
 }

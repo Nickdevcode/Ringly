@@ -33,12 +33,13 @@ Pra melhor experiência, instale os dois.
 O Ringly está em desenvolvimento ativo. **Windows 11** é o alvo suportado para a v1.0.
 macOS e Linux têm os back-ends estruturados e estão planejados para a próxima versão.
 
-| Recurso          | Windows 11 | macOS | Linux |
-| ---------------- | :--------: | :---: | :---: |
-| Toast nativo     |     ✓      |  ⏳   |  ⏳   |
-| Som de fallback  |     ✓      |  ⏳   |  ⏳   |
-| Registro AUMID   |     ✓      |   —   |   —   |
-| i18n pt-BR/en-US |     ✓      |   ✓   |   ✓   |
+| Recurso                   | Windows 11 | macOS | Linux |
+| ------------------------- | :--------: | :---: | :---: |
+| Toast nativo              |     ✓      |  ⏳   |  ⏳   |
+| Som de fallback           |     ✓      |  ⏳   |  ⏳   |
+| Registro AUMID            |     ✓      |   —   |   —   |
+| Notificações em pt-BR/en-US |    ✓      |   ✓   |   ✓   |
+| TUI e CLI em pt-BR/en-US  |     ✓      |   ✓   |   ✓   |
 
 ### Instalação
 
@@ -88,23 +89,24 @@ dentro do Claude Code.
 
 | Forma                                                       | Quando usar                                          |
 | ----------------------------------------------------------- | ---------------------------------------------------- |
-| **Plugin manager** — `/plugin` → Installed → Ringly         | Forma oficial e mais visual. Aplica imediatamente.   |
-| **`ringly config`** — TUI bonita no terminal                | Atalho local que escreve no `settings.json` por você. Pede `/reload-plugins` ao final. |
+| **`ringly config`** — TUI bonita no terminal (✨ recomendado) | Melhor experiência: setas pra navegar, espaço pra toggle, seletor visual de idioma. Escreve no `settings.json` por você e lembra de rodar `/reload-plugins` ao final. |
 | **Editar `settings.json` manualmente**                      | Para automação/CI. Sempre rode `/reload-plugins` depois. |
+| **Plugin manager** — `/plugin` → Installed → Ringly         | Forma oficial nativa do Claude Code. **Limitação atual**: o campo `language` é renderizado como input de texto livre (o schema oficial não suporta enum), e `Enter` em booleanos só navega entre campos — use `Space` para alternar. Para uma UX bem mais agradável, prefira `ringly config`. |
 
 #### Como o Ringly resolve a configuração em runtime
 
 O dispatcher dos hooks lê, **nesta ordem de prioridade**:
 
-1. **Variáveis de ambiente `CLAUDE_PLUGIN_OPTION_*`** — exportadas pelo Claude Code a partir de `pluginConfigs.ringly.options`. **Esta é a fonte real durante a execução do hook.**
-2. **Arquivo local** (`%APPDATA%\ringly\config.json` no Windows, `~/.config/ringly` no Linux, `~/Library/Application Support/ringly` no macOS) — só usado se a env var correspondente estiver ausente. Útil para rodar `ringly test` fora do Claude Code.
-3. **Defaults internos** — última camada.
+1. **`~/.claude/settings.json` → `pluginConfigs.ringly.options`** — fonte primária. O Ringly lê esse arquivo diretamente no início de cada hook, então qualquer mudança feita pelo plugin manager do Claude Code ou por `ringly config` é aplicada imediatamente, sem precisar de restart.
+2. **`config.json` local** (`%APPDATA%\ringly\config.json` no Windows, `~/.config/ringly` no Linux, `~/Library/Application Support/ringly` no macOS) — fallback usado apenas quando o `settings.json` não tem a chave `pluginConfigs.ringly`. Mantido para compatibilidade com instalações pré-0.2.1.
+3. **Variáveis de ambiente `RINGLY_DEBUG=1` e `CLAUDE_PLUGIN_OPTION_DEBUG=true`** — apenas para forçar logs detalhados durante diagnóstico, sem persistir nada.
+4. **Defaults internos** — última camada.
 
-> Se você editar o `config.json` local mas a opção também estiver no `settings.json` do Claude Code, a env var **sempre vence** dentro do Claude Code. Use sempre o plugin manager ou `ringly config` para evitar confusão.
+> O Claude Code **não exporta** as opções de `pluginConfigs` como variáveis de ambiente para os hooks. Por isso o Ringly precisa ler o `settings.json` diretamente. Sempre que possível, use o plugin manager ou `ringly config` — eles cuidam de fazer backup do arquivo antes de cada gravação.
 
 #### Opções disponíveis
 
-As chaves abaixo são usadas tanto no `userConfig` do plugin quanto nas env vars `CLAUDE_PLUGIN_OPTION_<KEY>` (em maiúsculas).
+As chaves abaixo correspondem ao `userConfig` declarado no `plugin.json` e ficam todas em `pluginConfigs.ringly.options` dentro de `~/.claude/settings.json`.
 
 | Chave                 | Tipo                  | Padrão | Descrição                                             |
 | --------------------- | --------------------- | :----: | ----------------------------------------------------- |
@@ -151,11 +153,14 @@ manualmente.
 
 1. O Claude Code emite um evento de hook (`Notification`, `Stop`, `StopFailure`, `SubagentStop`).
 2. O `hooks.json` do plugin executa `node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs <Event>`.
-3. O `dispatch.mjs` lê o payload JSON via stdin e tenta, nessa ordem:
+3. O `dispatch.mjs` lê o `~/.claude/settings.json` e checa as opções do Ringly. Se o evento
+   estiver desabilitado pelo usuário, o dispatcher encerra silenciosamente — sem disparar nada.
+4. Caso o evento esteja habilitado, o dispatcher lê o payload JSON via stdin e tenta, nessa ordem:
    - o módulo Node `ringly/hook` (melhor tradução, contexto de projeto),
    - o binário `ringly` no PATH,
-   - um fallback embutido que só depende de PowerShell + WinRT.
-4. No Windows, o toast é gerado como XML e exibido via o AUMID registrado
+   - um fallback embutido que só depende de PowerShell + WinRT (e que respeita idioma e `sound`
+     do `settings.json` também).
+5. No Windows, o toast é gerado como XML e exibido via o AUMID registrado
    `Claude.Code.CLI`. Um beep é tocado como fallback se o Modo Foco ou Não Perturbe
    estiverem bloqueando as notificações.
 
@@ -200,12 +205,13 @@ For the best experience, install both.
 Ringly is in active development. **Windows 11** is the supported target for v1.0.
 macOS and Linux toast back-ends are scaffolded and planned for the next release.
 
-| Surface          | Windows 11 | macOS | Linux |
-| ---------------- | :--------: | :---: | :---: |
-| Native toast     |     ✓      |  ⏳   |  ⏳   |
-| Sound fallback   |     ✓      |  ⏳   |  ⏳   |
-| AUMID register   |     ✓      |   —   |   —   |
-| i18n pt-BR/en-US |     ✓      |   ✓   |   ✓   |
+| Surface                       | Windows 11 | macOS | Linux |
+| ----------------------------- | :--------: | :---: | :---: |
+| Native toast                  |     ✓      |  ⏳   |  ⏳   |
+| Sound fallback                |     ✓      |  ⏳   |  ⏳   |
+| AUMID register                |     ✓      |   —   |   —   |
+| Notifications in pt-BR/en-US  |     ✓      |   ✓   |   ✓   |
+| TUI & CLI in pt-BR/en-US      |     ✓      |   ✓   |   ✓   |
 
 ### Installation
 
@@ -257,23 +263,24 @@ inside Claude Code.
 
 | Method                                                      | When to use                                                |
 | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| **Plugin manager** — `/plugin` → Installed → Ringly         | Official, visual flow. Applies immediately.                |
-| **`ringly config`** — slick TUI in your terminal            | Local shortcut that writes into `settings.json` for you. Asks you to run `/reload-plugins` at the end. |
+| **`ringly config`** — slick TUI in your terminal (✨ recommended) | Best experience: arrow keys to navigate, space to toggle, visual language picker. Writes into `settings.json` for you and reminds you to run `/reload-plugins` at the end. |
 | **Edit `settings.json` directly**                           | Best for automation/CI. Always run `/reload-plugins` after. |
+| **Plugin manager** — `/plugin` → Installed → Ringly         | Official native flow inside Claude Code. **Current limitation**: the `language` field is rendered as a free-text input (the official schema does not support enum), and `Enter` on booleans only moves between fields — use `Space` to toggle. For a much smoother UX, prefer `ringly config`. |
 
 #### How Ringly resolves the config at runtime
 
 The hook dispatcher reads, **in this priority order**:
 
-1. **Environment variables `CLAUDE_PLUGIN_OPTION_*`** — Claude Code exports them from `pluginConfigs.ringly.options`. **This is the actual source during hook execution.**
-2. **Local file** (`%APPDATA%\ringly\config.json` on Windows, `~/.config/ringly` on Linux, `~/Library/Application Support/ringly` on macOS) — only consulted when the matching env var is missing. Handy for running `ringly test` outside Claude Code.
-3. **Built-in defaults** — final fallback.
+1. **`~/.claude/settings.json` → `pluginConfigs.ringly.options`** — primary source. Ringly reads this file directly at the start of every hook, so changes made through Claude Code's plugin manager or `ringly config` apply immediately, with no restart required.
+2. **Local `config.json`** (`%APPDATA%\ringly\config.json` on Windows, `~/.config/ringly` on Linux, `~/Library/Application Support/ringly` on macOS) — fallback used only when `settings.json` has no `pluginConfigs.ringly` entry. Kept for backwards compatibility with pre-0.2.1 installs.
+3. **Environment variables `RINGLY_DEBUG=1` and `CLAUDE_PLUGIN_OPTION_DEBUG=true`** — only to force verbose logging during diagnostics; nothing is persisted.
+4. **Built-in defaults** — final fallback.
 
-> If you edit the local `config.json` but the same option is also set in Claude Code's `settings.json`, the env var **always wins** inside Claude Code. Stick to the plugin manager or `ringly config` to avoid surprises.
+> Claude Code **does not export** `pluginConfigs` options as environment variables to hooks. That's why Ringly reads `settings.json` directly. Prefer the plugin manager or `ringly config` whenever possible — both take a backup of the file before writing.
 
 #### Available settings
 
-The keys below are used by both the plugin's `userConfig` and the `CLAUDE_PLUGIN_OPTION_<KEY>` env vars (upper-cased).
+The keys below match the `userConfig` declared in `plugin.json` and live in `pluginConfigs.ringly.options` inside `~/.claude/settings.json`.
 
 | Key                   | Type                   | Default | Description                                              |
 | --------------------- | ---------------------- | :-----: | -------------------------------------------------------- |
@@ -319,11 +326,14 @@ Ringly **never destroys anything**: the original `settings.json` is moved to
 
 1. Claude Code emits a hook event (`Notification`, `Stop`, `StopFailure`, `SubagentStop`).
 2. The plugin's `hooks.json` runs `node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs <Event>`.
-3. `dispatch.mjs` reads the JSON payload from stdin and tries, in order:
+3. `dispatch.mjs` reads `~/.claude/settings.json` and checks your Ringly options. If the event
+   is disabled, the dispatcher exits silently — nothing is fired.
+4. If the event is enabled, the dispatcher reads the JSON payload from stdin and tries, in order:
    - the `ringly/hook` Node module (best translations, project-aware),
    - the `ringly` CLI binary on the PATH,
-   - an embedded fallback that only depends on PowerShell + WinRT.
-4. On Windows, the toast is generated as XML and shown via the registered
+   - an embedded fallback that only depends on PowerShell + WinRT (and that respects your
+     language and `sound` settings from `settings.json` too).
+5. On Windows, the toast is generated as XML and shown via the registered
    AUMID `Claude.Code.CLI`. A beep is played as a fallback if Focus Assist or
    Do Not Disturb is blocking notifications.
 

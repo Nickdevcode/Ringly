@@ -1,11 +1,13 @@
 import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
 import { type FC, useEffect, useState } from "react";
+import type { Translator } from "../../core/translator.js";
 import { DEFAULT_APP_ID } from "../../core/types.js";
 import type { RegisterAumidResult } from "../../platform/windows/aumid.js";
 import { Header } from "../components/Header.js";
 
 export interface AumidRegisterProps {
+  translator: Translator;
   appId?: string;
   registerFn: (appId: string) => Promise<RegisterAumidResult>;
   onDone: (result: RegisterAumidResult) => void;
@@ -13,7 +15,12 @@ export interface AumidRegisterProps {
 
 type Stage = "running" | "done" | "error";
 
-export const AumidRegister: FC<AumidRegisterProps> = ({ appId, registerFn, onDone }) => {
+export const AumidRegister: FC<AumidRegisterProps> = ({
+  translator,
+  appId,
+  registerFn,
+  onDone,
+}) => {
   const [stage, setStage] = useState<Stage>("running");
   const [result, setResult] = useState<RegisterAumidResult | null>(null);
 
@@ -47,10 +54,11 @@ export const AumidRegister: FC<AumidRegisterProps> = ({ appId, registerFn, onDon
   return (
     <Box flexDirection="column">
       <Header
+        translator={translator}
         step={4}
         totalSteps={4}
-        title="Register Windows integration"
-        subtitle="Creating Start Menu shortcut and AUMID for Windows toasts."
+        title={translator.t("tui.aumid.title")}
+        subtitle={translator.t("tui.aumid.subtitle")}
       />
 
       <Box paddingLeft={2} flexDirection="column" gap={1}>
@@ -59,7 +67,7 @@ export const AumidRegister: FC<AumidRegisterProps> = ({ appId, registerFn, onDon
             <Text color="cyan">
               <Spinner type="dots" />
             </Text>
-            <Text>Setting up Windows integration…</Text>
+            <Text>{translator.t("tui.aumid.running")}</Text>
           </Box>
         )}
 
@@ -70,17 +78,17 @@ export const AumidRegister: FC<AumidRegisterProps> = ({ appId, registerFn, onDon
                 ✓
               </Text>
               <Text bold color="green">
-                Windows integration ready
+                {translator.t("tui.aumid.success")}
               </Text>
             </Box>
             {result.skipped && (
               <Box paddingLeft={2}>
-                <Text dimColor>(already registered, no changes needed)</Text>
+                <Text dimColor>{translator.t("tui.aumid.already")}</Text>
               </Box>
             )}
             {result.notifierSetting && (
               <Box paddingLeft={2}>
-                <Text dimColor>Notification setting: </Text>
+                <Text dimColor>{translator.t("tui.aumid.notif_setting")} </Text>
                 <Text color="yellow">{result.notifierSetting}</Text>
               </Box>
             )}
@@ -94,15 +102,18 @@ export const AumidRegister: FC<AumidRegisterProps> = ({ appId, registerFn, onDon
                 ✗
               </Text>
               <Text bold color="red">
-                Registration failed
+                {translator.t("tui.aumid.error")}
               </Text>
             </Box>
             <Box paddingLeft={2}>
-              <Text dimColor>{result.reason ?? "unknown error"}</Text>
+              <Text dimColor>{result.reason ?? translator.t("tui.aumid.error_unknown")}</Text>
             </Box>
             <Box paddingLeft={2} marginTop={1}>
               <Text dimColor>
-                Try <Text color="cyan">ringly init --force</Text> after fixing the issue.
+                {translator.t("tui.aumid.retry_hint", { command: "__CMD__" }).split("__CMD__")[0]}
+                <Text color="cyan">ringly init --force</Text>
+                {translator.t("tui.aumid.retry_hint", { command: "__CMD__" }).split("__CMD__")[1] ??
+                  ""}
               </Text>
             </Box>
           </Box>

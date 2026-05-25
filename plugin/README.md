@@ -15,7 +15,9 @@ for full installation and configuration instructions.
 
 ## Configuration
 
-This plugin exposes user-facing settings via the Claude Code plugin manager:
+This plugin exposes user-facing settings via the Claude Code plugin manager. Every option
+is stored in `~/.claude/settings.json` under `pluginConfigs.ringly.options` and is read
+by the dispatcher on every hook invocation — no restart required.
 
 - `language`: `auto`, `pt-BR`, or `en-US`
 - `events_notification` / `events_stop` / `events_stopFailure` / `events_subagentStop`: toggle each hook
