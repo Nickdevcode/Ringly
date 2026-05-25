@@ -1,0 +1,5 @@
+{
+  "hook_event_name": "SubagentStop",
+  "cwd": "C:/Users/Nicolas/Documents/TI/Meus Projetos/NewsDev",
+  "agent_type": "gsd-executor"
+}

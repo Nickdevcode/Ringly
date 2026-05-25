@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        node: [20, 22]
+    steps:
+      - name: Configure git to keep LF line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        env:
+          RINGLY_SKIP_PREPARE: "1"
+        run: npm ci
+
+      - name: Diagnostic info
+        shell: bash
+        run: |
+          echo "::group::Environment"
+          echo "Node: $(node --version)"
+          echo "npm: $(npm --version)"
+          echo "OS: ${{ matrix.os }}"
+          echo "PWD: $(pwd)"
+          echo "::endgroup::"
+          echo "::group::Biome version"
+          npx biome --version
+          echo "::endgroup::"
+          echo "::group::Files biome will lint"
+          find src test bin scripts -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.mjs" -o -name "*.js" -o -name "*.json" \) | sort
+          echo "::endgroup::"
+          echo "::group::Line endings sample"
+          head -c 200 src/cli.ts | od -c | head -3
+          head -c 200 src/core/types.ts | od -c | head -3
+          echo "::endgroup::"
+
+      - name: Lint
+        shell: bash
+        run: npx biome check src test bin scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke check bundle entries
+        shell: bash
+        run: |
+          test -f dist/cli.cjs
+          test -f dist/cli.js
+          test -f dist/hook.cjs
+          test -f dist/hook.js
+          test -f dist/cli.d.ts
+          test -f dist/hook.d.ts

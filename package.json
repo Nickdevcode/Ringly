@@ -1,0 +1,98 @@
+{
+  "name": "ringly",
+  "version": "0.1.0",
+  "description": "Ringly — native cross-platform notifications for Claude Code with i18n (pt-BR / en-US)",
+  "type": "module",
+  "license": "MIT",
+  "author": {
+    "name": "Nicolas Carvalho",
+    "email": "nickcarva31@gmail.com"
+  },
+  "homepage": "https://github.com/nickdevcode/Ringly",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nickdevcode/Ringly.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nickdevcode/Ringly/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "notifications",
+    "toast",
+    "windows",
+    "macos",
+    "linux",
+    "i18n",
+    "cli",
+    "plugin",
+    "ringly"
+  ],
+  "bin": {
+    "ringly": "./bin/ringly.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js",
+      "require": "./dist/cli.cjs"
+    },
+    "./hook": {
+      "types": "./dist/hook.d.ts",
+      "import": "./dist/hook.js",
+      "require": "./dist/hook.cjs"
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "plugin",
+    "scripts",
+    "src",
+    "tsup.config.ts",
+    "tsconfig.json",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src test bin scripts",
+    "lint:fix": "biome check --write src test bin scripts",
+    "format": "biome format --write src test bin scripts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepare": "node ./scripts/prepare.js",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "env-paths": "^4.0.0",
+    "ink": "^7.0.4",
+    "ink-select-input": "^6.2.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.6",
+    "yargs": "^18.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/yargs": "^17.0.35",
+    "@vitest/coverage-v8": "^4.1.7",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

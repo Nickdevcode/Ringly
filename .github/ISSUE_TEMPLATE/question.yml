@@ -1,0 +1,26 @@
+name: Question / Support
+description: Ask for help with installation, configuration, or usage
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For installation or setup issues, please run `ringly doctor` first and include its output below.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What have you tried?
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: `ringly doctor` output (if applicable)
+      render: text

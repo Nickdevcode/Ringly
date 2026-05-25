@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest an improvement or new capability
+labels: [enhancement, triage]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: What problem are you trying to solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface does this affect?
+      multiple: true
+      options:
+        - Plugin (hooks)
+        - CLI (init / config / doctor / uninstall)
+        - Toast rendering
+        - i18n / translations
+        - Cross-platform (macOS / Linux)
+        - Documentation
+        - CI / release
+    validations:
+      required: true

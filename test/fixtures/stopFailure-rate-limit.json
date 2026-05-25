@@ -1,0 +1,6 @@
+{
+  "hook_event_name": "StopFailure",
+  "cwd": "C:/Users/Nicolas/Documents/TI/Meus Projetos/NewsDev",
+  "error_type": "rate_limit",
+  "message": "Rate limit exceeded"
+}

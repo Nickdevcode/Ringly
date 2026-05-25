@@ -1,0 +1,19 @@
+# Garante line endings consistentes (LF) em todo o repo, em qualquer SO.
+# Isso evita falsos negativos de lint (Biome esta configurado com lineEnding=lf)
+# quando o CI do GitHub Actions faz checkout em Windows runners.
+
+* text=auto eol=lf
+
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
+*.ps1        text eol=crlf
+
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.gif        binary
+*.ico        binary
+*.svg        text
+*.pdf        binary
+*.zip        binary
+*.tgz        binary

@@ -1,0 +1,6 @@
+{
+  "hook_event_name": "Notification",
+  "cwd": "C:/Users/Nicolas/Documents/TI/Meus Projetos/NewsDev",
+  "notification_type": "permission_prompt",
+  "message": "Permission required"
+}
