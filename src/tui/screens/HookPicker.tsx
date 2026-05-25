@@ -1,5 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import { type FC, useState } from "react";
+import { Footer } from "../components/Footer.js";
+import { Header } from "../components/Header.js";
 
 export interface EventToggles {
   notification: boolean;
@@ -15,6 +17,7 @@ export interface HookPickerProps {
 
 interface Item {
   key: keyof EventToggles;
+  icon: string;
   label: string;
   description: string;
 }
@@ -22,21 +25,25 @@ interface Item {
 const ITEMS: readonly Item[] = [
   {
     key: "notification",
+    icon: "🔔",
     label: "Permission / input requests",
     description: "Notify when Claude needs your attention",
   },
   {
     key: "stop",
+    icon: "✅",
     label: "Task complete",
     description: "Notify when Claude finishes a response",
   },
   {
     key: "stopFailure",
+    icon: "⚠️ ",
     label: "API errors",
     description: "Notify when an API error ends the session",
   },
   {
     key: "subagentStop",
+    icon: "🤖",
     label: "Subagent finished",
     description: "Notify when a subagent completes (off by default)",
   },
@@ -64,24 +71,56 @@ export const HookPicker: FC<HookPickerProps> = ({ initial, onSubmit }) => {
     if (key.return) onSubmit(toggles);
   });
 
+  const enabledCount = Object.values(toggles).filter(Boolean).length;
+
   return (
-    <Box flexDirection="column" gap={1}>
-      <Text bold>Step 2 / 4 — Which events should notify you?</Text>
-      <Text dimColor>↑/↓ to move · space to toggle · Enter to confirm</Text>
-      <Box flexDirection="column" marginTop={1}>
+    <Box flexDirection="column">
+      <Header
+        step={2}
+        totalSteps={4}
+        title="Choose which events should notify you"
+        subtitle={`${enabledCount} of ${ITEMS.length} enabled`}
+      />
+
+      <Box flexDirection="column" paddingLeft={2}>
         {ITEMS.map((item, idx) => {
           const active = idx === cursor;
           const checked = toggles[item.key];
-          const icon = checked ? "[x]" : "[ ]";
-          const props = active ? { color: "cyan" as const } : {};
+          const checkbox = checked ? "◉" : "◯";
+          const checkboxColor = checked ? "green" : "gray";
+          const cursorMark = active ? "›" : " ";
+
           return (
-            <Text key={item.key} {...props}>
-              {`${active ? "›" : " "} ${icon} ${item.label}  `}
-              <Text dimColor>{item.description}</Text>
-            </Text>
+            <Box key={item.key} flexDirection="row" gap={1}>
+              {active ? (
+                <Text bold color="cyan">
+                  {cursorMark}
+                </Text>
+              ) : (
+                <Text bold>{cursorMark}</Text>
+              )}
+              <Text color={checkboxColor}>{checkbox}</Text>
+              <Text>{item.icon}</Text>
+              {active ? (
+                <Text bold color="cyan">
+                  {item.label}
+                </Text>
+              ) : (
+                <Text>{item.label}</Text>
+              )}
+              <Text dimColor>— {item.description}</Text>
+            </Box>
           );
         })}
       </Box>
+
+      <Footer
+        hints={[
+          { key: "↑/↓", label: "move" },
+          { key: "Space", label: "toggle" },
+          { key: "Enter", label: "confirm" },
+        ]}
+      />
     </Box>
   );
 };

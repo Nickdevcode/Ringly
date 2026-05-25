@@ -49,17 +49,22 @@ export async function runInit(options: RunInitOptions = {}): Promise<void> {
     if (options.migrateLegacy) {
       runLegacyMigration();
     } else {
-      console.log(chalk.yellow("\nLegacy PowerShell hooks detected:"));
+      console.log("");
+      console.log(
+        `  ${chalk.bold.yellow("⚠")}  ${chalk.bold.yellow("Legacy PowerShell hooks detected")}`,
+      );
       if (detection.hooksFound.length > 0) {
-        console.log(chalk.dim(`  • hooks in settings.json: ${detection.hooksFound.join(", ")}`));
+        console.log(chalk.dim(`     • hooks in settings.json: ${detection.hooksFound.join(", ")}`));
       }
       if (detection.scriptsFound.length > 0) {
-        console.log(chalk.dim(`  • scripts on disk: ${detection.scriptsFound.join(", ")}`));
+        console.log(chalk.dim(`     • scripts on disk: ${detection.scriptsFound.join(", ")}`));
       }
       console.log(
-        chalk.yellow("These will fire duplicate toasts alongside Ringly. To migrate now, re-run:"),
+        chalk.dim(
+          "     These will fire duplicate toasts alongside Ringly. To migrate now, re-run:",
+        ),
       );
-      console.log(chalk.cyan("  ringly init --migrate-legacy"));
+      console.log(`     ${chalk.cyan("ringly init --migrate-legacy")}`);
       console.log("");
     }
   }
@@ -108,24 +113,32 @@ export async function runInit(options: RunInitOptions = {}): Promise<void> {
  * o Ringly via flags.
  */
 async function runNonInteractive(isWindows: boolean): Promise<void> {
-  console.log(chalk.bold("Ringly init (non-interactive mode)"));
+  const title = "◉ Ringly init  ·  non-interactive";
+  const border = "─".repeat(title.length + 2);
+  console.log("");
+  console.log(chalk.cyan(`╭${border}╮`));
+  console.log(chalk.cyan("│ ") + chalk.bold.cyan(title) + chalk.cyan(" │"));
+  console.log(chalk.cyan(`╰${border}╯`));
+  console.log("");
+
   const config = { ...DEFAULT_CONFIG };
   saveConfig(config);
-  console.log(`  ${chalk.green("✓")} Default config saved`);
+  console.log(`  ${chalk.green("✓")}  Default config saved`);
 
   let aumid: RegisterAumidResult | null = null;
   if (isWindows) {
     aumid = await registerAumid({ appId: DEFAULT_APP_ID });
-    if (aumid.ok) console.log(`  ${chalk.green("✓")} AUMID registered`);
-    else console.log(`  ${chalk.yellow("!")} AUMID skipped: ${aumid.reason ?? "unknown"}`);
+    if (aumid.ok) console.log(`  ${chalk.green("✓")}  AUMID registered`);
+    else console.log(`  ${chalk.yellow("⚠")}  AUMID skipped: ${aumid.reason ?? "unknown"}`);
   }
 
   writeInstallLog(config, aumid);
 
   console.log("");
-  console.log("Next steps inside Claude Code:");
-  console.log(`  ${chalk.cyan(MARKETPLACE_COMMAND)}`);
-  console.log(`  ${chalk.cyan(INSTALL_COMMAND)}`);
+  console.log(`  ${chalk.bold("Next steps inside Claude Code")}`);
+  console.log(`    ${chalk.cyan(MARKETPLACE_COMMAND)}`);
+  console.log(`    ${chalk.cyan(INSTALL_COMMAND)}`);
+  console.log("");
 }
 
 /**
@@ -135,26 +148,27 @@ async function runNonInteractive(isWindows: boolean): Promise<void> {
  * falha parcial o usuário consiga prosseguir com a instalação nova.
  */
 function runLegacyMigration(): void {
-  console.log(chalk.bold("\nMigrating legacy PowerShell hooks…"));
+  console.log("");
+  console.log(`  ${chalk.bold.cyan("◉")} ${chalk.bold("Migrating legacy PowerShell hooks…")}`);
   try {
     const result = disableLegacy();
     if (result.removedHooks.length > 0) {
-      console.log(`  ${chalk.green("✓")} Removed legacy hooks: ${result.removedHooks.join(", ")}`);
+      console.log(`  ${chalk.green("✓")}  Removed legacy hooks: ${result.removedHooks.join(", ")}`);
       if (result.backupFile) {
-        console.log(`    ${chalk.dim(`Backup: ${result.backupFile}`)}`);
+        console.log(`     ${chalk.dim("↳ ")}${chalk.dim(`Backup: ${result.backupFile}`)}`);
       }
     }
     if (result.movedScripts.length > 0) {
-      console.log(`  ${chalk.green("✓")} Archived scripts: ${result.movedScripts.join(", ")}`);
+      console.log(`  ${chalk.green("✓")}  Archived scripts: ${result.movedScripts.join(", ")}`);
       if (result.backupDir) {
-        console.log(`    ${chalk.dim(`Backup dir: ${result.backupDir}`)}`);
+        console.log(`     ${chalk.dim("↳ ")}${chalk.dim(`Backup dir: ${result.backupDir}`)}`);
       }
     }
     if (result.removedHooks.length === 0 && result.movedScripts.length === 0) {
-      console.log(`  ${chalk.dim("·")} Nothing to migrate`);
+      console.log(`  ${chalk.dim("·")}  Nothing to migrate`);
     }
   } catch (err) {
-    console.log(`  ${chalk.red("x")} Migration failed: ${(err as Error).message}`);
+    console.log(`  ${chalk.red("✗")}  Migration failed: ${(err as Error).message}`);
     logger.error("Legacy migration failed", { message: (err as Error).message });
   }
   console.log("");

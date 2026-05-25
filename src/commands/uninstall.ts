@@ -25,20 +25,20 @@ export interface RunUninstallOptions {
  */
 export async function runUninstall(options: RunUninstallOptions = {}): Promise<void> {
   const platform = detectPlatform();
-  console.log(chalk.bold("\nRingly uninstall"));
+  printUninstallHeader();
 
   if (platform === "windows") {
     const shortcut = defaultShortcutPath();
     if (existsSync(shortcut)) {
       try {
         unlinkSync(shortcut);
-        console.log(`  ${chalk.green("✓")} Removed Start Menu shortcut`);
+        console.log(`  ${chalk.green("✓")}  Removed Start Menu shortcut`);
         logger.info("Removed Start Menu shortcut", { shortcut });
       } catch (err) {
-        console.log(`  ${chalk.yellow("!")} Failed to remove shortcut: ${(err as Error).message}`);
+        console.log(`  ${chalk.yellow("⚠")}  Failed to remove shortcut: ${(err as Error).message}`);
       }
     } else {
-      console.log(`  ${chalk.dim("·")} Shortcut not present (skipping)`);
+      console.log(`  ${chalk.dim("·")}  Shortcut not present (skipping)`);
     }
   }
 
@@ -47,9 +47,9 @@ export async function runUninstall(options: RunUninstallOptions = {}): Promise<v
     if (existsSync(configFile)) {
       try {
         unlinkSync(configFile);
-        console.log(`  ${chalk.green("✓")} Removed local configuration`);
+        console.log(`  ${chalk.green("✓")}  Removed local configuration`);
       } catch (err) {
-        console.log(`  ${chalk.yellow("!")} Failed to remove config: ${(err as Error).message}`);
+        console.log(`  ${chalk.yellow("⚠")}  Failed to remove config: ${(err as Error).message}`);
       }
     }
     const configDir = getConfigDir();
@@ -67,29 +67,29 @@ export async function runUninstall(options: RunUninstallOptions = {}): Promise<v
     const totalLegacy = detection.hooksFound.length + detection.scriptsFound.length;
 
     if (totalLegacy === 0) {
-      console.log(`  ${chalk.dim("·")} No legacy PowerShell hooks detected (skipping)`);
+      console.log(`  ${chalk.dim("·")}  No legacy PowerShell hooks detected (skipping)`);
     } else {
       try {
         const result = disableLegacy();
         if (result.removedHooks.length > 0) {
           console.log(
-            `  ${chalk.green("✓")} Removed legacy hook entries: ${result.removedHooks.join(", ")}`,
+            `  ${chalk.green("✓")}  Removed legacy hook entries: ${result.removedHooks.join(", ")}`,
           );
           if (result.backupFile) {
-            console.log(`    ${chalk.dim(`Backup: ${result.backupFile}`)}`);
+            console.log(`     ${chalk.dim("↳ ")}${chalk.dim(`Backup: ${result.backupFile}`)}`);
           }
         }
         if (result.movedScripts.length > 0) {
           console.log(
-            `  ${chalk.green("✓")} Moved legacy scripts to backup: ${result.movedScripts.join(", ")}`,
+            `  ${chalk.green("✓")}  Moved legacy scripts to backup: ${result.movedScripts.join(", ")}`,
           );
           if (result.backupDir) {
-            console.log(`    ${chalk.dim(`Backup dir: ${result.backupDir}`)}`);
+            console.log(`     ${chalk.dim("↳ ")}${chalk.dim(`Backup dir: ${result.backupDir}`)}`);
           }
         }
       } catch (err) {
         console.log(
-          `  ${chalk.red("x")} Failed to disable legacy hooks: ${(err as Error).message}`,
+          `  ${chalk.red("✗")}  Failed to disable legacy hooks: ${(err as Error).message}`,
         );
         logger.error("Legacy uninstall failed", { message: (err as Error).message });
       }
@@ -97,11 +97,12 @@ export async function runUninstall(options: RunUninstallOptions = {}): Promise<v
   }
 
   console.log("");
-  console.log(chalk.dim("To remove the plugin from Claude Code, run:"));
-  console.log(chalk.cyan("  /plugin uninstall ringly@ringly"));
+  console.log(`  ${chalk.bold("Next steps")}`);
+  console.log(`  ${chalk.dim("Remove the plugin from Claude Code:")}`);
+  console.log(`    ${chalk.cyan("/plugin uninstall ringly@ringly")}`);
   console.log("");
-  console.log(chalk.dim("To remove the npm CLI:"));
-  console.log(chalk.cyan("  npm uninstall -g ringly"));
+  console.log(`  ${chalk.dim("Remove the npm CLI:")}`);
+  console.log(`    ${chalk.cyan("npm uninstall -g ringly")}`);
   console.log("");
 
   if (!options.legacy) {
@@ -109,10 +110,20 @@ export async function runUninstall(options: RunUninstallOptions = {}): Promise<v
     if (detection.hooksFound.length > 0 || detection.scriptsFound.length > 0) {
       console.log(
         chalk.yellow(
-          "Tip: legacy PowerShell hooks still present. Run `ringly uninstall --legacy` to remove them.",
+          "  ⚠  Legacy PowerShell hooks still present. Run `ringly uninstall --legacy` to clean them up.",
         ),
       );
       console.log("");
     }
   }
+}
+
+function printUninstallHeader(): void {
+  const title = "◉ Ringly uninstall";
+  const border = "─".repeat(title.length + 2);
+  console.log("");
+  console.log(chalk.yellow(`╭${border}╮`));
+  console.log(chalk.yellow("│ ") + chalk.bold.yellow(title) + chalk.yellow(" │"));
+  console.log(chalk.yellow(`╰${border}╯`));
+  console.log("");
 }

@@ -25,6 +25,14 @@ function isDebugEnabled(): boolean {
   return false;
 }
 
+const ensuredDirs = new Set<string>();
+
+function ensureDirOnce(dir: string): void {
+  if (ensuredDirs.has(dir)) return;
+  mkdirSync(dir, { recursive: true });
+  ensuredDirs.add(dir);
+}
+
 function writeLine(level: LogLevel, message: string, meta?: unknown): void {
   if (level === "debug" && !isDebugEnabled()) return;
 
@@ -34,7 +42,7 @@ function writeLine(level: LogLevel, message: string, meta?: unknown): void {
 
   try {
     const file = resolveLogFile();
-    mkdirSync(dirname(file), { recursive: true });
+    ensureDirOnce(dirname(file));
     appendFileSync(file, line, { encoding: "utf8" });
   } catch {
     try {

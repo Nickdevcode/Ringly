@@ -3,7 +3,9 @@
  * Script `prepare` do npm. Roda automaticamente em tres cenarios:
  *
  *   1. `npm install` na pasta do projeto (clone classico)
- *   2. `npm install -g github:user/repo` (instalacao direto do GitHub)
+ *   2. `npm install -g <github-shorthand>` (ex.: `npm install -g nickdevcode/Ringly`,
+ *      uma instalacao direto do GitHub via shorthand do npm, NAO confundir
+ *      com o `/plugin marketplace add` do Claude Code que tem sintaxe propria)
  *   3. Antes de `npm publish`
  *
  * Comportamento: faz build (tsup) apenas se `dist/` ainda nao existir.

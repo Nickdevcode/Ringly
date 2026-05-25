@@ -18,7 +18,7 @@ for full installation and configuration instructions.
 This plugin exposes user-facing settings via the Claude Code plugin manager:
 
 - `language`: `auto`, `pt-BR`, or `en-US`
-- `events.notification` / `events.stop` / `events.stopFailure` / `events.subagentStop`
+- `events_notification` / `events_stop` / `events_stopFailure` / `events_subagentStop`: toggle each hook
 - `sound`: enables or disables notification sound
 - `debug`: writes detailed logs
 

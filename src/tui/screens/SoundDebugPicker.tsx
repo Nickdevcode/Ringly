@@ -1,5 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import { type FC, useState } from "react";
+import { Footer } from "../components/Footer.js";
+import { Header } from "../components/Header.js";
 
 export interface SoundDebugValues {
   sound: boolean;
@@ -11,9 +13,26 @@ export interface SoundDebugPickerProps {
   onSubmit: (values: SoundDebugValues) => void;
 }
 
-const FIELDS: readonly { key: keyof SoundDebugValues; label: string; description: string }[] = [
-  { key: "sound", label: "Play notification sounds", description: "Plays the OS toast sound" },
-  { key: "debug", label: "Write debug logs", description: "Verbose log file (rotated by size)" },
+interface Field {
+  key: keyof SoundDebugValues;
+  icon: string;
+  label: string;
+  description: string;
+}
+
+const FIELDS: readonly Field[] = [
+  {
+    key: "sound",
+    icon: "🔊",
+    label: "Play notification sounds",
+    description: "Plays the OS toast sound on every event",
+  },
+  {
+    key: "debug",
+    icon: "🪵",
+    label: "Write debug logs",
+    description: "Verbose log file (rotated by size)",
+  },
 ];
 
 export const SoundDebugPicker: FC<SoundDebugPickerProps> = ({ initial, onSubmit }) => {
@@ -31,23 +50,53 @@ export const SoundDebugPicker: FC<SoundDebugPickerProps> = ({ initial, onSubmit 
   });
 
   return (
-    <Box flexDirection="column" gap={1}>
-      <Text bold>Step 3 / 4 — Sound and logging</Text>
-      <Text dimColor>↑/↓ to move · space to toggle · Enter to confirm</Text>
-      <Box flexDirection="column" marginTop={1}>
+    <Box flexDirection="column">
+      <Header
+        step={3}
+        totalSteps={4}
+        title="Sound and logging"
+        subtitle="Toggle sound and verbose logging."
+      />
+
+      <Box flexDirection="column" paddingLeft={2}>
         {FIELDS.map((field, idx) => {
           const active = idx === cursor;
           const checked = values[field.key];
-          const icon = checked ? "[x]" : "[ ]";
-          const props = active ? { color: "cyan" as const } : {};
+          const checkbox = checked ? "◉" : "◯";
+          const checkboxColor = checked ? "green" : "gray";
+          const cursorMark = active ? "›" : " ";
+
           return (
-            <Text key={field.key} {...props}>
-              {`${active ? "›" : " "} ${icon} ${field.label}  `}
-              <Text dimColor>{field.description}</Text>
-            </Text>
+            <Box key={field.key} flexDirection="row" gap={1}>
+              {active ? (
+                <Text bold color="cyan">
+                  {cursorMark}
+                </Text>
+              ) : (
+                <Text bold>{cursorMark}</Text>
+              )}
+              <Text color={checkboxColor}>{checkbox}</Text>
+              <Text>{field.icon}</Text>
+              {active ? (
+                <Text bold color="cyan">
+                  {field.label}
+                </Text>
+              ) : (
+                <Text>{field.label}</Text>
+              )}
+              <Text dimColor>— {field.description}</Text>
+            </Box>
           );
         })}
       </Box>
+
+      <Footer
+        hints={[
+          { key: "↑/↓", label: "move" },
+          { key: "Space", label: "toggle" },
+          { key: "Enter", label: "confirm" },
+        ]}
+      />
     </Box>
   );
 };

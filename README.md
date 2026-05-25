@@ -67,26 +67,52 @@ para você colar dentro do Claude Code.
 
 Depois, instale o plugin como na Opção A. As duas camadas se reconhecem automaticamente.
 
+### Atualizando
+
+Para pegar a versão mais recente publicada no npm:
+
+```bash
+npm install -g ringly@latest
+```
+
+Verifique a versão instalada com `ringly --version` ou `npm list -g ringly`.
+O plugin do Claude Code atualiza automaticamente quando você sobe uma nova
+versão no marketplace — se quiser forçar manualmente, rode `/plugin marketplace update`
+dentro do Claude Code.
+
 ### Configuração
 
-O Ringly lê configuração de três lugares, nesta ordem de prioridade:
+> **Importante:** o **plugin manager do Claude Code é a fonte de verdade**. Toda configuração do Ringly fica em `~/.claude/settings.json` sob a chave `pluginConfigs.ringly.options` — exatamente como a Anthropic recomenda para qualquer plugin.
 
-1. `userConfig` do plugin (UI do Claude Code).
-2. Variáveis de ambiente (`CLAUDE_PLUGIN_OPTION_*`).
-3. Arquivo local em:
-   - **Windows** — `%APPDATA%\ringly\config.json`
-   - **macOS** — `~/Library/Application Support/ringly/config.json`
-   - **Linux** — `~/.config/ringly/config.json`
+#### Três formas de configurar (todas escrevem no mesmo lugar)
 
-Opções disponíveis:
+| Forma                                                       | Quando usar                                          |
+| ----------------------------------------------------------- | ---------------------------------------------------- |
+| **Plugin manager** — `/plugin` → Installed → Ringly         | Forma oficial e mais visual. Aplica imediatamente.   |
+| **`ringly config`** — TUI bonita no terminal                | Atalho local que escreve no `settings.json` por você. Pede `/reload-plugins` ao final. |
+| **Editar `settings.json` manualmente**                      | Para automação/CI. Sempre rode `/reload-plugins` depois. |
+
+#### Como o Ringly resolve a configuração em runtime
+
+O dispatcher dos hooks lê, **nesta ordem de prioridade**:
+
+1. **Variáveis de ambiente `CLAUDE_PLUGIN_OPTION_*`** — exportadas pelo Claude Code a partir de `pluginConfigs.ringly.options`. **Esta é a fonte real durante a execução do hook.**
+2. **Arquivo local** (`%APPDATA%\ringly\config.json` no Windows, `~/.config/ringly` no Linux, `~/Library/Application Support/ringly` no macOS) — só usado se a env var correspondente estiver ausente. Útil para rodar `ringly test` fora do Claude Code.
+3. **Defaults internos** — última camada.
+
+> Se você editar o `config.json` local mas a opção também estiver no `settings.json` do Claude Code, a env var **sempre vence** dentro do Claude Code. Use sempre o plugin manager ou `ringly config` para evitar confusão.
+
+#### Opções disponíveis
+
+As chaves abaixo são usadas tanto no `userConfig` do plugin quanto nas env vars `CLAUDE_PLUGIN_OPTION_<KEY>` (em maiúsculas).
 
 | Chave                 | Tipo                  | Padrão | Descrição                                             |
 | --------------------- | --------------------- | :----: | ----------------------------------------------------- |
 | `language`            | `auto / pt-BR / en-US`| `auto` | `auto` detecta pelo locale do sistema.                |
-| `events.notification` | boolean               |  true  | Notifica quando o Claude pede permissão ou input.     |
-| `events.stop`         | boolean               |  true  | Notifica quando o Claude termina uma resposta.        |
-| `events.stopFailure`  | boolean               |  true  | Notifica quando um erro de API encerra a sessão.      |
-| `events.subagentStop` | boolean               | false  | Notifica quando um subagent termina.                  |
+| `events_notification` | boolean               |  true  | Notifica quando o Claude pede permissão ou input.     |
+| `events_stop`         | boolean               |  true  | Notifica quando o Claude termina uma resposta.        |
+| `events_stopFailure`  | boolean               |  true  | Notifica quando um erro de API encerra a sessão.      |
+| `events_subagentStop` | boolean               | false  | Notifica quando um subagent termina.                  |
 | `sound`               | boolean               |  true  | Toca som junto da notificação.                        |
 | `debug`               | boolean               | false  | Escreve logs detalhados.                              |
 
@@ -124,7 +150,7 @@ manualmente.
 ### Como funciona
 
 1. O Claude Code emite um evento de hook (`Notification`, `Stop`, `StopFailure`, `SubagentStop`).
-2. O `hooks.json` do plugin executa `node dispatch.mjs <Event>`.
+2. O `hooks.json` do plugin executa `node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs <Event>`.
 3. O `dispatch.mjs` lê o payload JSON via stdin e tenta, nessa ordem:
    - o módulo Node `ringly/hook` (melhor tradução, contexto de projeto),
    - o binário `ringly` no PATH,
@@ -210,28 +236,54 @@ command to install the plugin.
 After that, install the plugin as in Option A. Both layers will talk to each other
 automatically.
 
+### Updating
+
+To pull the latest version published on npm:
+
+```bash
+npm install -g ringly@latest
+```
+
+Check the installed version with `ringly --version` or `npm list -g ringly`.
+The Claude Code plugin updates automatically when a new version is pushed to
+the marketplace — to force a manual refresh, run `/plugin marketplace update`
+inside Claude Code.
+
 ### Configuration
 
-Ringly reads configuration from three places, in this priority order:
+> **Important:** the **Claude Code plugin manager is the source of truth**. All Ringly settings live in `~/.claude/settings.json` under `pluginConfigs.ringly.options` — exactly how Anthropic recommends for every plugin.
 
-1. `userConfig` provided by Claude Code (plugin manager UI).
-2. Environment variables (`CLAUDE_PLUGIN_OPTION_*`).
-3. Local config file under the OS standard location:
-   - **Windows** — `%APPDATA%\ringly\config.json`
-   - **macOS** — `~/Library/Application Support/ringly/config.json`
-   - **Linux** — `~/.config/ringly/config.json`
+#### Three ways to configure (all write to the same file)
 
-Available settings:
+| Method                                                      | When to use                                                |
+| ----------------------------------------------------------- | ---------------------------------------------------------- |
+| **Plugin manager** — `/plugin` → Installed → Ringly         | Official, visual flow. Applies immediately.                |
+| **`ringly config`** — slick TUI in your terminal            | Local shortcut that writes into `settings.json` for you. Asks you to run `/reload-plugins` at the end. |
+| **Edit `settings.json` directly**                           | Best for automation/CI. Always run `/reload-plugins` after. |
 
-| Key                       | Type                   | Default | Description                                              |
-| ------------------------- | ---------------------- | :-----: | -------------------------------------------------------- |
-| `language`                | `auto / pt-BR / en-US` | `auto`  | Auto-detects from system locale when set to `auto`.      |
-| `events.notification`     | boolean                |  true   | Notify when Claude requests permission or input.         |
-| `events.stop`             | boolean                |  true   | Notify when Claude finishes a response.                  |
-| `events.stopFailure`      | boolean                |  true   | Notify when an API error ends the session.               |
-| `events.subagentStop`     | boolean                |  false  | Notify when a subagent finishes.                         |
-| `sound`                   | boolean                |  true   | Play a sound with each notification.                     |
-| `debug`                   | boolean                |  false  | Write detailed logs.                                     |
+#### How Ringly resolves the config at runtime
+
+The hook dispatcher reads, **in this priority order**:
+
+1. **Environment variables `CLAUDE_PLUGIN_OPTION_*`** — Claude Code exports them from `pluginConfigs.ringly.options`. **This is the actual source during hook execution.**
+2. **Local file** (`%APPDATA%\ringly\config.json` on Windows, `~/.config/ringly` on Linux, `~/Library/Application Support/ringly` on macOS) — only consulted when the matching env var is missing. Handy for running `ringly test` outside Claude Code.
+3. **Built-in defaults** — final fallback.
+
+> If you edit the local `config.json` but the same option is also set in Claude Code's `settings.json`, the env var **always wins** inside Claude Code. Stick to the plugin manager or `ringly config` to avoid surprises.
+
+#### Available settings
+
+The keys below are used by both the plugin's `userConfig` and the `CLAUDE_PLUGIN_OPTION_<KEY>` env vars (upper-cased).
+
+| Key                   | Type                   | Default | Description                                              |
+| --------------------- | ---------------------- | :-----: | -------------------------------------------------------- |
+| `language`            | `auto / pt-BR / en-US` | `auto`  | Auto-detects from system locale when set to `auto`.      |
+| `events_notification` | boolean                |  true   | Notify when Claude requests permission or input.         |
+| `events_stop`         | boolean                |  true   | Notify when Claude finishes a response.                  |
+| `events_stopFailure`  | boolean                |  true   | Notify when an API error ends the session.               |
+| `events_subagentStop` | boolean                |  false  | Notify when a subagent finishes.                         |
+| `sound`               | boolean                |  true   | Play a sound with each notification.                     |
+| `debug`               | boolean                |  false  | Write detailed logs.                                     |
 
 ### CLI commands
 
@@ -266,7 +318,7 @@ Ringly **never destroys anything**: the original `settings.json` is moved to
 ### How it works
 
 1. Claude Code emits a hook event (`Notification`, `Stop`, `StopFailure`, `SubagentStop`).
-2. The plugin's `hooks.json` runs `node dispatch.mjs <Event>`.
+2. The plugin's `hooks.json` runs `node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs <Event>`.
 3. `dispatch.mjs` reads the JSON payload from stdin and tries, in order:
    - the `ringly/hook` Node module (best translations, project-aware),
    - the `ringly` CLI binary on the PATH,

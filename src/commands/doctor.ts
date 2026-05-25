@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import chalk from "chalk";
+import { getClaudeSettingsFile, readRinglyPluginOptions } from "../core/claudeSettings.js";
 import { getConfigFile, loadConfig } from "../core/config.js";
 import { detectLegacy } from "../core/legacy.js";
 import { logger } from "../core/logger.js";
@@ -44,6 +45,7 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<void> {
     });
   }
 
+  checks.push(checkPluginOptions());
   checks.push(checkConfigFile());
   checks.push(checkLegacy());
 
@@ -178,27 +180,54 @@ function checkLegacy(): CheckResult {
   };
 }
 
+function checkPluginOptions(): CheckResult {
+  const file = getClaudeSettingsFile();
+  if (!existsSync(file)) {
+    return {
+      label: "Claude Code plugin settings",
+      level: "warn",
+      detail: `${file} not found`,
+      hint: "Open `/plugin` in Claude Code → Installed → Ringly → Configure, or run `ringly config`.",
+    };
+  }
+  const options = readRinglyPluginOptions();
+  const definedKeys = Object.keys(options);
+  if (definedKeys.length === 0) {
+    return {
+      label: "Claude Code plugin settings",
+      level: "warn",
+      detail: "no plugin options set (using built-in defaults)",
+      hint: "Configure via `/plugin` in Claude Code or run `ringly config`.",
+    };
+  }
+  const language = options.language ?? "(default)";
+  return {
+    label: "Claude Code plugin settings",
+    level: "ok",
+    detail: `${definedKeys.length} option(s) set · language: ${language}`,
+  };
+}
+
 function checkConfigFile(): CheckResult {
   const file = getConfigFile();
   const exists = existsSync(file);
   if (!exists) {
     return {
-      label: "Local configuration",
-      level: "warn",
-      detail: `not found at ${file}`,
-      hint: "Run `ringly init` or `ringly config` to create it.",
+      label: "Local configuration fallback",
+      level: "ok",
+      detail: "not present (plugin settings take precedence)",
     };
   }
   try {
     const config = loadConfig();
     return {
-      label: "Local configuration",
+      label: "Local configuration fallback",
       level: "ok",
       detail: `${file} (language: ${config.language})`,
     };
   } catch (err) {
     return {
-      label: "Local configuration",
+      label: "Local configuration fallback",
       level: "fail",
       detail: (err as Error).message,
       hint: "Fix or delete the config file and re-run `ringly init`.",
@@ -207,19 +236,39 @@ function checkConfigFile(): CheckResult {
 }
 
 function printReport(platform: string, checks: CheckResult[]): void {
-  console.log(chalk.bold("\nRingly diagnostics"));
-  console.log(chalk.dim(`Platform: ${platform}`));
+  const okCount = checks.filter((c) => c.level === "ok").length;
+  const warnCount = checks.filter((c) => c.level === "warn").length;
+  const failCount = checks.filter((c) => c.level === "fail").length;
+  const total = checks.length;
+
+  const headerLine = `◉ Ringly diagnostics  ·  ${platform}  ·  ${okCount}/${total} OK`;
+  const border = "─".repeat(headerLine.length + 2);
+
   console.log("");
+  console.log(chalk.cyan(`╭${border}╮`));
+  console.log(chalk.cyan("│ ") + chalk.bold.cyan(headerLine) + chalk.cyan(" │"));
+  console.log(chalk.cyan(`╰${border}╯`));
+  console.log("");
+
   for (const c of checks) {
     const icon =
-      c.level === "ok" ? chalk.green("✓") : c.level === "warn" ? chalk.yellow("!") : chalk.red("x");
-    const label = chalk.bold(c.label);
+      c.level === "ok" ? chalk.green("✓") : c.level === "warn" ? chalk.yellow("⚠") : chalk.red("✗");
+    const labelColor =
+      c.level === "ok" ? chalk.bold : c.level === "warn" ? chalk.bold.yellow : chalk.bold.red;
+    const label = labelColor(c.label);
     const detail = c.detail ? chalk.dim(` — ${c.detail}`) : "";
-    console.log(`  ${icon} ${label}${detail}`);
+    console.log(`  ${icon}  ${label}${detail}`);
     if (c.hint && c.level !== "ok") {
-      console.log(`    ${chalk.dim(c.hint)}`);
+      console.log(`     ${chalk.dim("↳ ")}${chalk.dim(c.hint)}`);
     }
   }
+
   console.log("");
-  console.log(chalk.dim(`Log file: ${logger.getLogFile()}`));
+  const summary: string[] = [];
+  if (okCount > 0) summary.push(chalk.green(`${okCount} passed`));
+  if (warnCount > 0) summary.push(chalk.yellow(`${warnCount} warning${warnCount > 1 ? "s" : ""}`));
+  if (failCount > 0) summary.push(chalk.red(`${failCount} failed`));
+  console.log(`  ${chalk.dim("Summary:")} ${summary.join(chalk.dim(" · "))}`);
+  console.log(`  ${chalk.dim("Log file:")} ${chalk.dim(logger.getLogFile())}`);
+  console.log("");
 }

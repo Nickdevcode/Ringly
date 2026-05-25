@@ -3,6 +3,7 @@ import { type FC, useCallback, useState } from "react";
 import type { LanguageSetting, RinglyConfig } from "../core/types.js";
 import type { RegisterAumidResult } from "../platform/windows/aumid.js";
 import { AumidRegister } from "./screens/AumidRegister.js";
+import { ConfigDone } from "./screens/ConfigDone.js";
 import { Done } from "./screens/Done.js";
 import { type EventToggles, HookPicker } from "./screens/HookPicker.js";
 import { LanguagePicker } from "./screens/LanguagePicker.js";
@@ -11,25 +12,31 @@ import { Welcome } from "./screens/Welcome.js";
 
 type Stage = "welcome" | "language" | "events" | "sound" | "aumid" | "done";
 
+export type AppMode = "init" | "config";
+
 export interface AppProps {
   initialConfig: RinglyConfig;
   isWindows: boolean;
+  mode?: AppMode;
   registerAumidFn?: ((appId: string) => Promise<RegisterAumidResult>) | undefined;
   onComplete: (config: RinglyConfig, aumid: RegisterAumidResult | null) => Promise<void> | void;
-  marketplaceCommand: string;
-  installCommand: string;
+  marketplaceCommand?: string;
+  installCommand?: string;
+  settingsFile?: string;
 }
 
 export const App: FC<AppProps> = ({
   initialConfig,
   isWindows,
+  mode = "init",
   registerAumidFn,
   onComplete,
   marketplaceCommand,
   installCommand,
+  settingsFile,
 }) => {
   const { exit } = useApp();
-  const [stage, setStage] = useState<Stage>("welcome");
+  const [stage, setStage] = useState<Stage>(mode === "config" ? "language" : "welcome");
   const [language, setLanguage] = useState<LanguageSetting>(initialConfig.language);
   const [events, setEvents] = useState<EventToggles>(initialConfig.events);
   const [soundDebug, setSoundDebug] = useState<SoundDebugValues>({
@@ -78,8 +85,11 @@ export const App: FC<AppProps> = ({
           initial={soundDebug}
           onSubmit={(values) => {
             setSoundDebug(values);
-            if (isWindows && registerAumidFn) setStage("aumid");
-            else finish(null).catch(() => exit());
+            if (mode === "init" && isWindows && registerAumidFn) {
+              setStage("aumid");
+            } else {
+              finish(null).catch(() => exit());
+            }
           }}
         />
       )}
@@ -92,9 +102,10 @@ export const App: FC<AppProps> = ({
           }}
         />
       )}
-      {stage === "done" && (
+      {stage === "done" && mode === "init" && marketplaceCommand && installCommand && (
         <Done marketplaceCommand={marketplaceCommand} installCommand={installCommand} />
       )}
+      {stage === "done" && mode === "config" && <ConfigDone settingsFile={settingsFile ?? ""} />}
     </Box>
   );
 };

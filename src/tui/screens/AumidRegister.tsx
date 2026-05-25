@@ -3,6 +3,7 @@ import Spinner from "ink-spinner";
 import { type FC, useEffect, useState } from "react";
 import { DEFAULT_APP_ID } from "../../core/types.js";
 import type { RegisterAumidResult } from "../../platform/windows/aumid.js";
+import { Header } from "../components/Header.js";
 
 export interface AumidRegisterProps {
   appId?: string;
@@ -24,7 +25,7 @@ export const AumidRegister: FC<AumidRegisterProps> = ({ appId, registerFn, onDon
         if (cancelled) return;
         setResult(r);
         setStage(r.ok ? "done" : "error");
-        setTimeout(() => onDone(r), 600);
+        setTimeout(() => onDone(r), 300);
       } catch (err) {
         if (cancelled) return;
         const failure: RegisterAumidResult = {
@@ -35,7 +36,7 @@ export const AumidRegister: FC<AumidRegisterProps> = ({ appId, registerFn, onDon
         };
         setResult(failure);
         setStage("error");
-        setTimeout(() => onDone(failure), 600);
+        setTimeout(() => onDone(failure), 300);
       }
     })();
     return () => {
@@ -44,29 +45,69 @@ export const AumidRegister: FC<AumidRegisterProps> = ({ appId, registerFn, onDon
   }, [appId, registerFn, onDone]);
 
   return (
-    <Box flexDirection="column" gap={1}>
-      <Text bold>Step 4 / 4 — Registering Windows integration</Text>
-      {stage === "running" && (
-        <Box gap={1}>
-          <Spinner type="dots" />
-          <Text>Creating Start Menu shortcut and AUMID…</Text>
-        </Box>
-      )}
-      {stage === "done" && result && (
-        <Box flexDirection="column" gap={0}>
-          <Text color="green">✓ Done</Text>
-          {result.skipped && <Text dimColor>(already registered, skipped rewrite)</Text>}
-          {result.notifierSetting && (
-            <Text dimColor>Notification setting: {result.notifierSetting}</Text>
-          )}
-        </Box>
-      )}
-      {stage === "error" && result && (
-        <Box flexDirection="column">
-          <Text color="red">✗ Failed</Text>
-          <Text dimColor>{result.reason ?? "unknown error"}</Text>
-        </Box>
-      )}
+    <Box flexDirection="column">
+      <Header
+        step={4}
+        totalSteps={4}
+        title="Register Windows integration"
+        subtitle="Creating Start Menu shortcut and AUMID for Windows toasts."
+      />
+
+      <Box paddingLeft={2} flexDirection="column" gap={1}>
+        {stage === "running" && (
+          <Box flexDirection="row" gap={1}>
+            <Text color="cyan">
+              <Spinner type="dots" />
+            </Text>
+            <Text>Setting up Windows integration…</Text>
+          </Box>
+        )}
+
+        {stage === "done" && result && (
+          <Box flexDirection="column" gap={0}>
+            <Box flexDirection="row" gap={1}>
+              <Text color="green" bold>
+                ✓
+              </Text>
+              <Text bold color="green">
+                Windows integration ready
+              </Text>
+            </Box>
+            {result.skipped && (
+              <Box paddingLeft={2}>
+                <Text dimColor>(already registered, no changes needed)</Text>
+              </Box>
+            )}
+            {result.notifierSetting && (
+              <Box paddingLeft={2}>
+                <Text dimColor>Notification setting: </Text>
+                <Text color="yellow">{result.notifierSetting}</Text>
+              </Box>
+            )}
+          </Box>
+        )}
+
+        {stage === "error" && result && (
+          <Box flexDirection="column">
+            <Box flexDirection="row" gap={1}>
+              <Text color="red" bold>
+                ✗
+              </Text>
+              <Text bold color="red">
+                Registration failed
+              </Text>
+            </Box>
+            <Box paddingLeft={2}>
+              <Text dimColor>{result.reason ?? "unknown error"}</Text>
+            </Box>
+            <Box paddingLeft={2} marginTop={1}>
+              <Text dimColor>
+                Try <Text color="cyan">ringly init --force</Text> after fixing the issue.
+              </Text>
+            </Box>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 };

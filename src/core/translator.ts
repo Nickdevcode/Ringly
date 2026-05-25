@@ -23,7 +23,7 @@ export function detectSystemLanguage(): SupportedLanguage {
     process.env["LANGUAGE"],
     process.env["LC_ALL"],
     process.env["LC_MESSAGES"],
-  ].filter((v): v is string => typeof v === "string" && v.length > 0);
+  ].filter((v): v is string => typeof v === "string" && v.length > 0 && v.toLowerCase() !== "auto");
 
   for (const value of candidates) {
     if (value === "pt-BR" || value === "en-US") return value;
