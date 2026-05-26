@@ -18,6 +18,7 @@ export const DEFAULT_CONFIG: RinglyConfig = {
   },
   sound: true,
   debug: false,
+  checkUpdates: true,
   appId: DEFAULT_APP_ID,
 };
 
@@ -94,6 +95,9 @@ export function applyEnvOverrides(config: RinglyConfig): RinglyConfig {
 
   const debug = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_DEBUG"]);
   if (debug !== null) next.debug = debug;
+
+  const checkUpdates = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_CHECK_UPDATES"]);
+  if (checkUpdates !== null) next.checkUpdates = checkUpdates;
 
   next.appId = normalizeAppId(next.appId);
   next.language = normalizeLanguage(next.language);

@@ -5,6 +5,72 @@
 
 ---
 
+## [0.4.0] — 2026-05-26
+
+### 🇧🇷 Português
+
+**Adicionado**
+
+- **Slash command `/ringly-update` dentro do Claude Code** (`plugin/commands/ringly-update.md`). Detecta se a CLI npm está instalada, consulta o npm registry, mostra a diferença de versão, pede confirmação via `AskUserQuestion` e roda `npm install -g ringly@latest` por você. No final, lembra de rodar `/reload-plugins` (ou fechar/reabrir o Claude Code se houver lock de arquivos no Windows). Todo o passo a passo está no `.md` com `allowed-tools` restrito a `ringly:*` e `npm install -g ringly:*` — o comando não toca em nenhum arquivo do usuário diretamente, só delega pra CLI.
+- **Hook `SessionStart` com checagem de update em background** (`plugin/hooks/hooks.json` + `src/commands/updateCheckHook.ts`). Uma vez por dia, no início de cada sessão do Claude Code, o plugin checa o npm em background. Se tiver versão nova, dispara uma toast nativa idêntica às outras notificações — "Ringly 0.5.0 disponível, rode /ringly-update". O timestamp é persistido em `${CLAUDE_PLUGIN_DATA}/last-update-check.json`, então a próxima sessão dentro de 24h pula a checagem sem nem tocar na rede. Throttle, opt-out (`check_updates: false`) e fail-silent garantidos: a checagem nunca atrasa nem bloqueia o início da sessão.
+- **Subcomando `ringly update`** (`src/commands/update.ts`). Roda fora do Claude Code também. Três modos:
+  - `ringly update` — interativo, com caixa visual, confirmação `s/N` e mensagens localizadas;
+  - `ringly update --check` — só imprime um JSON `{current, latest, hasUpdate, reachable}` (esse é o modo que o `/ringly-update` consome);
+  - `ringly update --yes` — pula a confirmação e instala direto (esse é o modo que o `/ringly-update` usa quando o usuário confirma).
+  Detecta `EBUSY`/`EPERM`/`access is denied` no stderr do `npm install` e troca pra uma mensagem de "feche o Claude Code e tente de novo" em vez de só vomitar o erro.
+- **Opção `check_updates: boolean`** no `userConfig` do plugin (`plugin/.claude-plugin/plugin.json`). Padrão `true`. Quando `false`, a checagem do `SessionStart` sai antes de qualquer I/O — nem o `last-update-check.json` é lido. Aparece automaticamente no plugin manager nativo, no `ringly config` e na resolução por env var (`CLAUDE_PLUGIN_OPTION_CHECK_UPDATES`).
+- **`src/core/updateCheck.ts`** — módulo isolado e testado com `checkForUpdate` (fetch nativo do Node 20+ com timeout de 3s via `AbortController`), `compareSemver` (suporta prerelease), `shouldCheckUpdate`/`recordCheck`/`readLastCheckRecord` (throttle de 24h via arquivo). Sem nova dependência runtime — só `fetch` nativo, já garantido pelo `engines.node: ">=20.0.0"`.
+- **`src/core/ownVersion.ts`** — helper compartilhado que sobe o filesystem buscando o `package.json` com `name: "ringly"`. Funciona em qualquer layout: rodando do source, do `dist/` bundle ou de uma instalação global no npm prefix.
+
+**Mudado**
+
+- **`plugin/hooks/dispatch.mjs`** reconhece `SessionStart` na whitelist e trata como um caminho separado: tenta delegar via `ringly/hook` ou via CLI binary, mas **não cai no fallback de embedded toast** (o evento é uma checagem, não uma notificação direta — sem CLI, não tem como checar).
+- **`src/cli.ts hook`** aceita `SessionStart` como evento posicional pro fallback de CLI binário do dispatcher.
+- **`RinglyConfig` ganhou `checkUpdates: boolean`** propagado por `src/core/types.ts`, `src/core/config.ts` (default + env override), `src/core/claudeSettings.ts` (read/write em `pluginConfigs.ringly.options.check_updates`).
+
+**Testes**
+
+- **+35 testes novos** (de 94 para 129). `test/updateCheck.test.ts` cobre 30 cenários: comparação semver (igual/maior/menor/prerelease), validação de input (package name e semver mal-formados), `shouldCheckUpdate` em todos os boundaries, `recordCheck`/`readLastCheckRecord` com round-trip e JSON corrompido, `checkForUpdate` com 200/404/network throw/JSON inválido/timeout via `AbortController`/custom registry. `test/updateCheckHook.test.ts` cobre 5 cenários do hook em si: opt-out, throttle, sem update, network down, registro de timestamp malformado.
+
+**Docs**
+
+- Seção "Atualizando" do README reescrita em pt-BR e en-US descrevendo `/ringly-update`, o auto-check, a atualização manual e como desligar a checagem.
+- `plugin/README.md` lista os 5 hooks agora (incluindo `SessionStart`) e o novo slash command.
+- `CONTRIBUTING.md` atualizado: contagem de testes (129), whitelist de eventos com `SessionStart`, e o layout do projeto inclui os arquivos novos (`commands/ringly-update.md`, `core/ownVersion.ts`, `core/updateCheck.ts`, `commands/update.ts`, `commands/updateCheckHook.ts`).
+
+### 🇺🇸 English
+
+**Added**
+
+- **`/ringly-update` slash command inside Claude Code** (`plugin/commands/ringly-update.md`). Detects whether the npm CLI is installed, queries the npm registry, shows the version diff, asks for confirmation via `AskUserQuestion`, and runs `npm install -g ringly@latest` for you. At the end, it reminds you to run `/reload-plugins` (or close and reopen Claude Code if Windows holds files locked). The entire flow lives in the `.md` with `allowed-tools` restricted to `ringly:*` and `npm install -g ringly:*` — the command never touches user files directly; everything goes through the CLI.
+- **`SessionStart` hook with background update check** (`plugin/hooks/hooks.json` + `src/commands/updateCheckHook.ts`). Once a day, at the start of each Claude Code session, the plugin checks npm in the background. If a newer version exists, it fires a native toast identical to the other notifications — "Ringly 0.5.0 available, run /ringly-update". The timestamp is persisted at `${CLAUDE_PLUGIN_DATA}/last-update-check.json`, so the next session within 24h skips the check without touching the network. Throttle, opt-out (`check_updates: false`) and fail-silent guarantees in place: the check never delays or blocks session start.
+- **`ringly update` subcommand** (`src/commands/update.ts`). Works outside of Claude Code too. Three modes:
+  - `ringly update` — interactive, with a visual box, `s/y/N` confirmation and localized messages;
+  - `ringly update --check` — just prints `{current, latest, hasUpdate, reachable}` JSON (this is what `/ringly-update` consumes);
+  - `ringly update --yes` — skip confirmation and install directly (this is what `/ringly-update` runs after the user confirms).
+  Detects `EBUSY`/`EPERM`/`access is denied` in the `npm install` stderr and swaps the message for a "close Claude Code and retry" hint instead of dumping the raw error.
+- **`check_updates: boolean` option** in the plugin's `userConfig` (`plugin/.claude-plugin/plugin.json`). Default `true`. When `false`, the `SessionStart` check exits before any I/O — `last-update-check.json` isn't even read. Shows up automatically in the native plugin manager, in `ringly config` and via env var (`CLAUDE_PLUGIN_OPTION_CHECK_UPDATES`).
+- **`src/core/updateCheck.ts`** — isolated and tested module with `checkForUpdate` (Node 20+ native `fetch` with 3s timeout via `AbortController`), `compareSemver` (prerelease-aware), `shouldCheckUpdate`/`recordCheck`/`readLastCheckRecord` (24h throttle via file). No new runtime dependency — just native `fetch`, already guaranteed by `engines.node: ">=20.0.0"`.
+- **`src/core/ownVersion.ts`** — shared helper that walks up the filesystem looking for the `package.json` with `name: "ringly"`. Works in any layout: running from source, from the `dist/` bundle, or from a global npm prefix install.
+
+**Changed**
+
+- **`plugin/hooks/dispatch.mjs`** recognizes `SessionStart` in the whitelist and treats it as a separate path: delegates via `ringly/hook` or the CLI binary, but **does not fall back to the embedded toast** (the event is a check, not a direct notification — no CLI, no check).
+- **`src/cli.ts hook`** accepts `SessionStart` as a positional event for the dispatcher's CLI-binary fallback.
+- **`RinglyConfig` gained `checkUpdates: boolean`** propagated through `src/core/types.ts`, `src/core/config.ts` (default + env override) and `src/core/claudeSettings.ts` (read/write under `pluginConfigs.ringly.options.check_updates`).
+
+**Tests**
+
+- **+35 new tests** (from 94 to 129). `test/updateCheck.test.ts` covers 30 scenarios: semver comparison (equal/greater/lower/prerelease), input validation (bad package names and bad semver), `shouldCheckUpdate` at every boundary, `recordCheck`/`readLastCheckRecord` with round-trip and corrupt JSON, `checkForUpdate` with 200/404/network throw/invalid JSON/`AbortController` timeout/custom registry. `test/updateCheckHook.test.ts` covers 5 scenarios on the hook itself: opt-out, throttle, no update, network down, malformed timestamp file.
+
+**Docs**
+
+- "Updating" section of the README rewritten in pt-BR and en-US describing `/ringly-update`, the auto-check, the manual update and how to disable the check.
+- `plugin/README.md` now lists the 5 hooks (including `SessionStart`) and the new slash command.
+- `CONTRIBUTING.md` updated: test count (129), event whitelist with `SessionStart`, and the project layout lists the new files (`commands/ringly-update.md`, `core/ownVersion.ts`, `core/updateCheck.ts`, `commands/update.ts`, `commands/updateCheckHook.ts`).
+
+---
+
 ## [0.3.0] — 2026-05-25
 
 ### 🇧🇷 Português
@@ -305,7 +371,10 @@ First public release. Full Windows 11 support with pt-BR / en-US translation.
 
 ---
 
-[Unreleased]: https://github.com/nickdevcode/Ringly/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/nickdevcode/Ringly/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/nickdevcode/Ringly/releases/tag/v0.4.0
+[0.3.0]: https://github.com/nickdevcode/Ringly/releases/tag/v0.3.0
+[0.2.4]: https://github.com/nickdevcode/Ringly/releases/tag/v0.2.4
 [0.2.1]: https://github.com/nickdevcode/Ringly/releases/tag/v0.2.1
 [0.2.0]: https://github.com/nickdevcode/Ringly/releases/tag/v0.2.0
 [0.1.1]: https://github.com/nickdevcode/Ringly/releases/tag/v0.1.1

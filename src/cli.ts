@@ -79,6 +79,29 @@ async function main(): Promise<void> {
       },
     )
     .command(
+      "update",
+      "Check npm for a newer Ringly release and optionally install it",
+      (b) =>
+        b
+          .option("check", {
+            type: "boolean",
+            default: false,
+            describe: "Only check; print a JSON snapshot and exit",
+          })
+          .option("yes", {
+            type: "boolean",
+            default: false,
+            describe: "Skip the confirmation prompt and install immediately",
+          }),
+      async (argv) => {
+        const mod = await import("./commands/update.js");
+        await mod.runUpdate({
+          check: argv.check,
+          yes: argv.yes,
+        });
+      },
+    )
+    .command(
       "uninstall",
       "Remove the AUMID shortcut and local configuration",
       (b) =>
@@ -100,16 +123,22 @@ async function main(): Promise<void> {
       (b) =>
         b.positional("event", {
           type: "string",
-          choices: ["Notification", "Stop", "StopFailure", "SubagentStop"] as const,
+          choices: ["Notification", "Stop", "StopFailure", "SubagentStop", "SessionStart"] as const,
         }),
       async (argv) => {
-        const mod = await import("./commands/hook.js");
         const evt = argv["_"][1] as
           | "Notification"
           | "Stop"
           | "StopFailure"
           | "SubagentStop"
+          | "SessionStart"
           | undefined;
+        if (evt === "SessionStart") {
+          const mod = await import("./commands/updateCheckHook.js");
+          await mod.runUpdateCheckHook();
+          return;
+        }
+        const mod = await import("./commands/hook.js");
         await mod.runHook(evt ? { forcedEvent: evt } : {});
       },
     )

@@ -7,7 +7,13 @@ import { join } from "node:path";
 
 const requireFromHere = createRequire(import.meta.url);
 
-const ALLOWED_EVENTS = new Set(["Notification", "Stop", "StopFailure", "SubagentStop"]);
+const ALLOWED_EVENTS = new Set([
+  "Notification",
+  "Stop",
+  "StopFailure",
+  "SubagentStop",
+  "SessionStart",
+]);
 
 const SETTINGS_FILE = join(homedir(), ".claude", "settings.json");
 
@@ -19,6 +25,7 @@ const DEFAULT_OPTIONS = {
   events_subagentStop: false,
   sound: true,
   debug: false,
+  check_updates: true,
 };
 
 function loadOptions() {
@@ -61,6 +68,8 @@ function eventEnabled(event) {
       return OPTIONS.events_stopFailure !== false;
     case "SubagentStop":
       return OPTIONS.events_subagentStop === true;
+    case "SessionStart":
+      return OPTIONS.check_updates !== false;
     default:
       return false;
   }
@@ -499,6 +508,15 @@ async function main() {
 
   if (await tryNodeModule(event, rawStdin)) return;
   if (await tryCliBinary(event, rawStdin)) return;
+
+  // SessionStart is an update-check trigger, not a user-facing notification.
+  // If the CLI module/binary is unreachable we cannot perform the check —
+  // there's nothing useful the embedded PowerShell toast can do here, so we
+  // simply give up silently rather than firing a misleading toast.
+  if (event === "SessionStart") {
+    debugLog("SessionStart: no CLI reachable; skipping update check");
+    return;
+  }
 
   let payload = {};
   if (rawStdin.trim().length > 0) {

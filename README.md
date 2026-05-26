@@ -85,16 +85,44 @@ daí, configure idioma, eventos, som e debug pelo gerenciador de plugins, por
 
 ### Atualizando
 
-Para pegar a versão mais recente publicada no npm:
+A partir da v0.4.0, o próprio Ringly te avisa quando tem uma versão nova:
+
+1. **Aviso automático.** Uma vez por dia, no início da sessão do Claude Code, o
+   plugin checa o npm em background. Se tiver versão nova, dispara uma toast nativa
+   do tipo "Ringly 0.5.0 disponível — rode `/ringly-update` no Claude Code". É a
+   mesma toast que você já conhece, só vinda do próprio plugin.
+2. **Atualização guiada via slash command.** Dentro do Claude Code, rode:
+
+   ```text
+   /ringly-update
+   ```
+
+   O comando consulta o npm, mostra a diferença entre a versão instalada e a mais
+   recente, pede confirmação e roda `npm install -g ringly@latest` por você.
+   No final, ele lembra de rodar `/reload-plugins` para a sessão ativa carregar
+   a nova versão (ou fechar e reabrir o Claude Code se houver lock de arquivos
+   no Windows).
+
+#### Atualização manual
+
+Se preferir fazer na mão (ou estiver fora do Claude Code):
 
 ```bash
 npm install -g ringly@latest
 ```
 
-Verifique a versão instalada com `ringly --version` ou `npm list -g ringly`.
-O plugin do Claude Code atualiza automaticamente quando você sobe uma nova
-versão no marketplace — se quiser forçar manualmente, rode `/plugin marketplace update`
-dentro do Claude Code.
+Verifique a versão instalada com `ringly --version` ou `ringly update --check`
+(esse último imprime um JSON com `current`, `latest`, `hasUpdate`, `reachable` —
+útil em scripts e CI). O plugin do Claude Code atualiza automaticamente quando
+uma nova versão é publicada no marketplace; force com `/plugin marketplace update`
+dentro do Claude Code se quiser puxar manualmente.
+
+#### Desativando a checagem automática
+
+A checagem é throttled a uma request por dia, não envia nada além da consulta
+pública ao npm e respeita o opt-out. Pra desligar, marque `check_updates: false`
+nas opções do plugin (via `ringly config`, plugin manager ou editando
+`~/.claude/settings.json`).
 
 ### Configuração
 
@@ -132,6 +160,7 @@ As chaves abaixo correspondem ao `userConfig` declarado no `plugin.json` e ficam
 | `events_subagentStop` | boolean               | false  | Notifica quando um subagent termina.                  |
 | `sound`               | boolean               |  true  | Toca som junto da notificação.                        |
 | `debug`               | boolean               | false  | Escreve logs detalhados.                              |
+| `check_updates`       | boolean               |  true  | Checa o npm 1x/dia no SessionStart e avisa via toast quando tem versão nova. |
 
 ### Comandos da CLI
 
@@ -141,15 +170,25 @@ ringly init --non-interactive  # aplica defaults, sem TUI
 ringly config                  # reconfigura interativamente
 ringly doctor                  # diagnóstico do ambiente local
 ringly test --event Stop --lang pt-BR
+ringly update                  # checa o npm e roda a atualização guiada
+ringly update --check          # só imprime JSON {current, latest, hasUpdate, reachable}
+ringly update --yes            # pula a confirmação e instala direto
 ringly uninstall               # remove AUMID, atalho e configurações do Ringly
 ```
 
+> Dentro do Claude Code, o slash command `/ringly-update` faz a mesma coisa que
+> `ringly update`, com confirmação visual via `AskUserQuestion` e instrução
+> automática pra rodar `/reload-plugins` no final.
+
 ### Como funciona
 
-1. O Claude Code emite um evento de hook (`Notification`, `Stop`, `StopFailure`, `SubagentStop`).
+1. O Claude Code emite um evento de hook (`SessionStart`, `Notification`, `Stop`, `StopFailure`, `SubagentStop`).
 2. O `hooks.json` do plugin executa `node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs <Event>`.
 3. O `dispatch.mjs` lê o `~/.claude/settings.json` e checa as opções do Ringly. Se o evento
-   estiver desabilitado pelo usuário, o dispatcher encerra silenciosamente — sem disparar nada.
+   estiver desabilitado pelo usuário (`events_*` ou `check_updates`), o dispatcher encerra
+   silenciosamente — sem disparar nada. O `SessionStart` é tratado como um caminho separado:
+   em vez de virar toast direto, ele dispara uma checagem de versão (throttled a 24h) que
+   só vira toast se o npm tiver versão nova.
 4. Caso o evento esteja habilitado, o dispatcher lê o payload JSON via stdin e tenta, nessa ordem:
    - **o módulo Node `ringly/hook`** — caminho normal quando a CLI foi instalada
      (passo 1 da instalação). Traz a tradução mais rica e contexto de projeto.
@@ -256,16 +295,44 @@ From here, tweak language, events, sound, and debug via the plugin manager,
 
 ### Updating
 
-To pull the latest version published on npm:
+Starting in v0.4.0, Ringly tells you when there's a new version available:
+
+1. **Automatic notice.** Once a day, at the start of a Claude Code session, the
+   plugin checks npm in the background. If a newer version is out, it fires the
+   same native toast you already know — "Ringly 0.5.0 available — run
+   `/ringly-update` inside Claude Code".
+2. **Guided update via slash command.** Inside Claude Code, run:
+
+   ```text
+   /ringly-update
+   ```
+
+   The command queries npm, shows the diff between the installed and the latest
+   version, asks for confirmation, and runs `npm install -g ringly@latest` for
+   you. At the end it reminds you to run `/reload-plugins` so the active session
+   picks up the new version (or close and reopen Claude Code if Windows holds
+   the files locked).
+
+#### Manual update
+
+If you'd rather do it by hand (or you're outside Claude Code):
 
 ```bash
 npm install -g ringly@latest
 ```
 
-Check the installed version with `ringly --version` or `npm list -g ringly`.
-The Claude Code plugin updates automatically when a new version is pushed to
-the marketplace — to force a manual refresh, run `/plugin marketplace update`
-inside Claude Code.
+Check the installed version with `ringly --version` or `ringly update --check`
+(the latter prints a JSON snapshot with `current`, `latest`, `hasUpdate`,
+`reachable` — handy for scripts and CI). The Claude Code plugin updates
+automatically when a new version lands in the marketplace; force a manual
+refresh with `/plugin marketplace update` if you want it now.
+
+#### Disabling the automatic check
+
+The check is throttled to one request per day, only hits the public npm
+registry, and respects opt-out. To disable it, set `check_updates: false` in
+the plugin options (via `ringly config`, the plugin manager, or by editing
+`~/.claude/settings.json` directly).
 
 ### Configuration
 
@@ -303,6 +370,7 @@ The keys below match the `userConfig` declared in `plugin.json` and live in `plu
 | `events_subagentStop` | boolean                |  false  | Notify when a subagent finishes.                         |
 | `sound`               | boolean                |  true   | Play a sound with each notification.                     |
 | `debug`               | boolean                |  false  | Write detailed logs.                                     |
+| `check_updates`       | boolean                |  true   | Check npm once a day at session start and notify via toast when a new version ships. |
 
 ### CLI commands
 
@@ -312,15 +380,25 @@ ringly init --non-interactive  # apply defaults, skip the TUI
 ringly config                  # reconfigure interactively
 ringly doctor                  # run a diagnostic of the local setup
 ringly test --event Stop --lang pt-BR
+ringly update                  # check npm and run the guided update
+ringly update --check          # just print {current, latest, hasUpdate, reachable} JSON
+ringly update --yes            # skip the prompt and install directly
 ringly uninstall               # remove AUMID, shortcut, and Ringly settings
 ```
 
+> Inside Claude Code, the `/ringly-update` slash command does the same thing as
+> `ringly update`, with visual confirmation via `AskUserQuestion` and an
+> automatic prompt to run `/reload-plugins` at the end.
+
 ### How it works
 
-1. Claude Code emits a hook event (`Notification`, `Stop`, `StopFailure`, `SubagentStop`).
+1. Claude Code emits a hook event (`SessionStart`, `Notification`, `Stop`, `StopFailure`, `SubagentStop`).
 2. The plugin's `hooks.json` runs `node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs <Event>`.
 3. `dispatch.mjs` reads `~/.claude/settings.json` and checks your Ringly options. If the event
-   is disabled, the dispatcher exits silently — nothing is fired.
+   is disabled (`events_*` or `check_updates`), the dispatcher exits silently — nothing is
+   fired. `SessionStart` follows its own path: instead of becoming a toast directly, it
+   triggers an npm version check (throttled to 24h) that only turns into a toast when a
+   newer release is found.
 4. If the event is enabled, the dispatcher reads the JSON payload from stdin and tries, in order:
    - **the `ringly/hook` Node module** — the normal path once the CLI has been
      installed (step 1 of the installation). Ships the richest translations and

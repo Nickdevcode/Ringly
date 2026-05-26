@@ -148,5 +148,21 @@
   "cli.init.next_steps_in_claude": "Próximos passos dentro do Claude Code",
   "cli.config.requires_tty": "`config` requer um terminal interativo. Configure via variáveis de ambiente ou edite",
   "cli.config.requires_tty2": "o arquivo ~/.claude/settings.json diretamente.",
-  "cli.config.save_failed": "Falha ao salvar configurações: {message}"
+  "cli.config.save_failed": "Falha ao salvar configurações: {message}",
+  "cli.update.header": "Ringly update",
+  "cli.update.checking": "Consultando o npm…",
+  "cli.update.current_version": "Versão instalada",
+  "cli.update.latest_version": "Última no npm",
+  "cli.update.already_latest": "Você já está na versão mais recente — {version}.",
+  "cli.update.available": "Nova versão disponível: {latest} (você está na {current}).",
+  "cli.update.check_failed": "Não foi possível consultar o npm (sem conexão ou registry indisponível).",
+  "cli.update.confirm_prompt": "Atualizar para {latest}? [s/N]",
+  "cli.update.confirm_prompt_en": "Update to {latest}? [y/N]",
+  "cli.update.aborted": "Atualização cancelada.",
+  "cli.update.installing": "Instalando ringly@{version}…",
+  "cli.update.install_succeeded": "Atualização concluída. Rode /reload-plugins dentro do Claude Code, ou feche e reabra a sessão.",
+  "cli.update.install_failed": "Falha ao rodar `npm install -g ringly@latest`. Verifique permissões e tente manualmente.",
+  "cli.update.install_failed_windows_locked": "Falha — provavelmente arquivos do Claude Code estão travados. Feche o Claude Code e rode manualmente: npm install -g ringly@latest",
+  "cli.update.run_manually": "Comando equivalente: {command}",
+  "cli.update.toast_body": "Nova versão {latest} disponível (você está na {current}). Rode /ringly-update no Claude Code."
 }

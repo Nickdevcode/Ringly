@@ -148,5 +148,21 @@
   "cli.init.next_steps_in_claude": "Next steps inside Claude Code",
   "cli.config.requires_tty": "`config` requires an interactive terminal. Pass settings via env vars or edit",
   "cli.config.requires_tty2": "the ~/.claude/settings.json file directly.",
-  "cli.config.save_failed": "Failed to save settings: {message}"
+  "cli.config.save_failed": "Failed to save settings: {message}",
+  "cli.update.header": "Ringly update",
+  "cli.update.checking": "Checking npm…",
+  "cli.update.current_version": "Installed version",
+  "cli.update.latest_version": "Latest on npm",
+  "cli.update.already_latest": "You're already on the latest version — {version}.",
+  "cli.update.available": "New version available: {latest} (you're on {current}).",
+  "cli.update.check_failed": "Couldn't reach the npm registry (offline or registry unavailable).",
+  "cli.update.confirm_prompt": "Update to {latest}? [s/N]",
+  "cli.update.confirm_prompt_en": "Update to {latest}? [y/N]",
+  "cli.update.aborted": "Update aborted.",
+  "cli.update.installing": "Installing ringly@{version}…",
+  "cli.update.install_succeeded": "Update complete. Run /reload-plugins inside Claude Code, or close and reopen the session.",
+  "cli.update.install_failed": "Failed to run `npm install -g ringly@latest`. Check permissions and try manually.",
+  "cli.update.install_failed_windows_locked": "Update failed — Claude Code probably has files locked. Close Claude Code and run manually: npm install -g ringly@latest",
+  "cli.update.run_manually": "Equivalent command: {command}",
+  "cli.update.toast_body": "Version {latest} is available (you're on {current}). Run /ringly-update inside Claude Code."
 }

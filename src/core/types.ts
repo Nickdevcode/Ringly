@@ -60,6 +60,7 @@ export interface RinglyConfig {
   };
   sound: boolean;
   debug: boolean;
+  checkUpdates: boolean;
   appId: string;
 }
 

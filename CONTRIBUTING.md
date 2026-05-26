@@ -51,7 +51,7 @@ Se o `doctor` reportar tudo verde, você está pronto. Se o AUMID falhar, rode
 | `npm run typecheck`    | `tsc --noEmit` — checa tipos                           |
 | `npm run lint`         | Biome (lint + format check, inclui `plugin/hooks/`)    |
 | `npm run lint:fix`     | Biome com auto-correção                                |
-| `npm test`             | Vitest (94 testes, ~600 ms)                            |
+| `npm test`             | Vitest (129 testes, ~600 ms)                            |
 | `npm run test:watch`   | Vitest em watch                                        |
 | `npm run test:coverage`| Vitest com cobertura v8 (thresholds: 70% / 65% branch) |
 | `npm run build`        | Build de produção (ESM + CJS + DTS)                    |
@@ -95,7 +95,9 @@ respeite estes limites já estabelecidos:
   (`src/core/config.ts::normalizeAppId`). Valores inválidos viram
   `DEFAULT_APP_ID` com warn no log.
 - **Eventos**: whitelist hard-coded em `ALLOWED_EVENTS` (`Notification`, `Stop`,
-  `StopFailure`, `SubagentStop`). Não adicione evento novo sem atualizar a
+  `StopFailure`, `SubagentStop`, `SessionStart`). `SessionStart` é o único que
+  não vira toast direto — ele dispara a checagem de update (veja
+  `src/commands/updateCheckHook.ts`). Não adicione evento novo sem atualizar a
   whitelist em `hook.ts`, `hooks.json`, `dispatch.mjs` e `plugin.json` ao mesmo tempo.
 
 ### Como abrir uma PR
@@ -138,8 +140,10 @@ Só pra você entender o fluxo:
 Ringly/
 ├── plugin/                            # camada do plugin do Claude Code
 │   ├── .claude-plugin/plugin.json    # manifesto + userConfig (idioma, eventos, etc.)
+│   ├── commands/
+│   │   └── ringly-update.md          # slash command /ringly-update
 │   └── hooks/
-│       ├── hooks.json                # mapeia os 4 eventos pro dispatch.mjs
+│       ├── hooks.json                # mapeia os 5 eventos pro dispatch.mjs
 │       └── dispatch.mjs              # shim Node standalone (sem deps externas)
 ├── src/
 │   ├── cli.ts + hook.ts              # dois entries separados (CLI vs hook crítico)
@@ -150,17 +154,19 @@ Ringly/
 │   │   ├── eventMapper.ts            # payload → NotificationIntent
 │   │   ├── logger.ts                 # append + rotação a 5MB
 │   │   ├── notifier.ts               # orquestra notify() do hook
+│   │   ├── ownVersion.ts             # helper walk-up pro package.json do ringly
 │   │   ├── payloadGuards.ts          # sanitização do payload do hook
 │   │   ├── stdin.ts                  # read stdin com timeout + maxBytes
 │   │   ├── translator.ts             # i18n (pt-BR / en-US)
 │   │   ├── types.ts                  # tipos públicos
+│   │   ├── updateCheck.ts            # checagem npm + comparação semver + throttle
 │   │   └── xml.ts                    # escape XML
 │   ├── channels/                     # toast (Windows hoje); webhook futuro
 │   ├── platform/{windows,macos,linux}/  # backends por SO (macOS/Linux são stubs)
-│   ├── commands/                     # init, config, doctor, test, hook, uninstall
+│   ├── commands/                     # init, config, doctor, test, hook, update, updateCheckHook, uninstall
 │   ├── locales/                      # pt-BR.json, en-US.json
 │   └── tui/                          # telas Ink (App.tsx + screens/)
-├── test/                             # 94 testes Vitest
+├── test/                             # 129 testes Vitest
 └── scripts/prepare.js                # build sob demanda no npm install
 ```
 
@@ -249,7 +255,7 @@ If `doctor` reports everything green, you're ready. If AUMID fails, run
 | `npm run typecheck`     | `tsc --noEmit` — type-checks the project                |
 | `npm run lint`          | Biome (lint + format check, covers `plugin/hooks/`)     |
 | `npm run lint:fix`      | Biome with auto-fix                                     |
-| `npm test`              | Vitest (94 tests, ~600 ms)                              |
+| `npm test`              | Vitest (129 tests, ~600 ms)                              |
 | `npm run test:watch`    | Vitest in watch mode                                    |
 | `npm run test:coverage` | Vitest with v8 coverage (thresholds: 70% / 65% branch)  |
 | `npm run build`         | Production build (ESM + CJS + DTS)                      |
@@ -293,9 +299,11 @@ these established limits:
   (`src/core/config.ts::normalizeAppId`). Invalid values fall back to
   `DEFAULT_APP_ID` with a warning log.
 - **Events**: hard-coded whitelist in `ALLOWED_EVENTS` (`Notification`, `Stop`,
-  `StopFailure`, `SubagentStop`). Don't add a new event without updating the
-  whitelist in `hook.ts`, `hooks.json`, `dispatch.mjs`, and `plugin.json` at
-  the same time.
+  `StopFailure`, `SubagentStop`, `SessionStart`). `SessionStart` is the only
+  event that does not turn into a toast directly — it triggers the update
+  check instead (see `src/commands/updateCheckHook.ts`). Don't add a new event
+  without updating the whitelist in `hook.ts`, `hooks.json`, `dispatch.mjs`,
+  and `plugin.json` at the same time.
 
 ### How to open a PR
 
@@ -337,8 +345,10 @@ For context, here's the flow:
 Ringly/
 ├── plugin/                            # Claude Code plugin layer
 │   ├── .claude-plugin/plugin.json    # manifest + userConfig (language, events, etc.)
+│   ├── commands/
+│   │   └── ringly-update.md          # /ringly-update slash command
 │   └── hooks/
-│       ├── hooks.json                # maps the 4 events to dispatch.mjs
+│       ├── hooks.json                # maps the 5 events to dispatch.mjs
 │       └── dispatch.mjs              # standalone Node shim (no external deps)
 ├── src/
 │   ├── cli.ts + hook.ts              # two separate entries (CLI vs hot-path hook)
@@ -349,17 +359,19 @@ Ringly/
 │   │   ├── eventMapper.ts            # payload → NotificationIntent
 │   │   ├── logger.ts                 # append + 5 MB rotation
 │   │   ├── notifier.ts               # orchestrates the hook's notify()
+│   │   ├── ownVersion.ts             # walk-up helper that finds the ringly package.json
 │   │   ├── payloadGuards.ts          # hook payload sanitization
 │   │   ├── stdin.ts                  # read stdin with timeout + maxBytes
 │   │   ├── translator.ts             # i18n (pt-BR / en-US)
 │   │   ├── types.ts                  # public types
+│   │   ├── updateCheck.ts            # npm check + semver compare + 24h throttle
 │   │   └── xml.ts                    # XML escape
 │   ├── channels/                     # toast (Windows today); webhook future
 │   ├── platform/{windows,macos,linux}/  # OS back-ends (macOS/Linux are stubs)
-│   ├── commands/                     # init, config, doctor, test, hook, uninstall
+│   ├── commands/                     # init, config, doctor, test, hook, update, updateCheckHook, uninstall
 │   ├── locales/                      # pt-BR.json, en-US.json
 │   └── tui/                          # Ink screens (App.tsx + screens/)
-├── test/                             # 94 Vitest tests
+├── test/                             # 129 Vitest tests
 └── scripts/prepare.js                # on-demand build during npm install
 ```
 

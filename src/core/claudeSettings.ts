@@ -52,6 +52,7 @@ export interface RinglyPluginOptions {
   events_subagentStop?: boolean;
   sound?: boolean;
   debug?: boolean;
+  check_updates?: boolean;
 }
 
 export function readRinglyPluginOptions(): RinglyPluginOptions {
@@ -151,6 +152,7 @@ export function ringlyConfigToPluginOptions(config: RinglyConfig): RinglyPluginO
     events_subagentStop: config.events.subagentStop,
     sound: config.sound,
     debug: config.debug,
+    check_updates: config.checkUpdates,
   };
 }
 
@@ -173,6 +175,7 @@ export function pluginOptionsToRinglyConfig(
     },
     sound: options.sound ?? defaults.sound,
     debug: options.debug ?? defaults.debug,
+    checkUpdates: options.check_updates ?? defaults.checkUpdates,
   };
 }
 
