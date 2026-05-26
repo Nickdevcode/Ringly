@@ -5,6 +5,46 @@
 
 ---
 
+## [0.5.1] — 2026-05-26
+
+### 🇧🇷 Português
+
+**Corrigido**
+
+- **`ringly update --yes` quebrava no Windows com `spawn EINVAL` antes de tocar no npm** (`src/commands/update.ts`). A causa: desde o Node 20.12 / 21.7 / 22+ ([CVE-2024-27980](https://github.com/nodejs/node/security/advisories/GHSA-jrjf-7c8f-mr95)), o Node passou a recusar `spawn` direto de arquivos `.bat` / `.cmd` no Windows por design — exatamente o que a gente fazia com `spawn("npm.cmd", [...], { shell: false })`. O erro acontecia antes de qualquer mensagem localizada do CLI aparecer, então o usuário via só `spawn EINVAL` cru e ficava sem saber o que tinha quebrado. Agora, no Windows, o spawn usa `shell: true` (deixa o `cmd.exe` resolver o shim do npm); macOS e Linux seguem com `shell: false`, comportamento idêntico ao anterior. Como os argumentos são literais hardcoded (`install -g ringly@latest`), não há superfície de injeção. Quem rodava `ringly update` ou `/ringly-update` no Windows e batia nesse erro agora consegue atualizar normalmente.
+
+**Mudado**
+
+- **`src/commands/update.ts`** ganhou uma função pura exportada `buildNpmInstallSpec(platform)` que devolve `{ command, args, options }` decidindo o shell por plataforma. Isso isola a decisão de spawn e deixa o caminho testável sem precisar mockar `node:child_process`. O `runNpmInstallLatest` continua privado e segue usando essa spec.
+
+**Testes**
+
+- **Novo arquivo `test/update.test.ts`** (4 casos) cobrindo a regressão: comando/args iguais em todas as plataformas, `shell: true` no Windows, `shell: false` no macOS/Linux, e `stdio` / `windowsHide` preservados. Reproduzimos o `EINVAL` direto em Node v22.14.0 antes do fix e validamos que o caminho novo executa o npm corretamente.
+
+**Notas pra quem tá vindo da v0.5.0**
+
+- Nada quebra. A correção é puramente interna ao subcomando `ringly update` / hook `SessionStart` / slash `/ringly-update`. Quem estava no macOS ou Linux nem percebe diferença; quem estava no Windows com Node moderno e batia no `spawn EINVAL` agora consegue rodar `/ringly-update` direto do Claude Code, ou `ringly update` no terminal, sem precisar copiar o `npm install -g ringly@latest` manualmente.
+
+### 🇺🇸 English
+
+**Fixed**
+
+- **`ringly update --yes` was failing on Windows with `spawn EINVAL` before npm even started** (`src/commands/update.ts`). Root cause: since Node 20.12 / 21.7 / 22+ ([CVE-2024-27980](https://github.com/nodejs/node/security/advisories/GHSA-jrjf-7c8f-mr95)), Node refuses by design to spawn `.bat` / `.cmd` files directly on Windows — exactly what we were doing with `spawn("npm.cmd", [...], { shell: false })`. The error fired before any localized CLI message could appear, so users only saw the raw `spawn EINVAL` and had no idea what broke. We now pass `shell: true` on Windows (letting `cmd.exe` resolve the npm shim); macOS and Linux still use `shell: false`, behavior unchanged. Since the arguments are hardcoded literals (`install -g ringly@latest`), there is no command-injection surface. Anyone hitting this on Windows via `ringly update` or `/ringly-update` can now update normally.
+
+**Changed**
+
+- **`src/commands/update.ts`** now exports a pure `buildNpmInstallSpec(platform)` helper that returns `{ command, args, options }`, deciding the shell per platform. This isolates the spawn decision and makes it unit-testable without mocking `node:child_process`. `runNpmInstallLatest` stays private and uses the spec.
+
+**Tests**
+
+- **New `test/update.test.ts`** (4 cases) covering the regression: same command/args across platforms, `shell: true` on Windows, `shell: false` on macOS/Linux, and `stdio` / `windowsHide` preserved. We reproduced the `EINVAL` directly on Node v22.14.0 before the fix and validated that the new path runs npm successfully.
+
+**Notes for v0.5.0 users**
+
+- Nothing breaks. The fix is internal to the `ringly update` subcommand / `SessionStart` hook / `/ringly-update` slash command. macOS and Linux users notice no difference; Windows users on modern Node who were hitting `spawn EINVAL` can now run `/ringly-update` straight from Claude Code, or `ringly update` from the terminal, without having to copy-paste `npm install -g ringly@latest` themselves.
+
+---
+
 ## [0.5.0] — 2026-05-26
 
 ### 🇧🇷 Português

@@ -9,7 +9,7 @@
  *    npm install with a long timeout, and prints the post-install
  *    `/reload-plugins` instruction.
  */
-import { spawn } from "node:child_process";
+import { type SpawnOptions, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import chalk from "chalk";
 import { DEFAULT_CONFIG, loadConfig } from "../core/config.js";
@@ -177,18 +177,46 @@ interface InstallResult {
   timedOut: boolean;
 }
 
+export interface NpmInstallSpec {
+  command: string;
+  args: readonly string[];
+  options: SpawnOptions;
+}
+
+/**
+ * Resolve how `npm install -g ringly@latest` should be spawned for the given
+ * platform.
+ *
+ * On Windows, Node 20.12+/21.7+/22+ refuses to spawn `.bat`/`.cmd` shims
+ * directly (CVE-2024-27980): the call throws `EINVAL` unless `shell: true` is
+ * set so that `cmd.exe` resolves the shim. The arguments here are hardcoded
+ * literals (no user input), so enabling the shell is safe — there is no
+ * surface for command injection.
+ *
+ * On macOS/Linux, `npm` is a real executable on PATH and runs without a
+ * shell, matching prior behavior.
+ */
+export function buildNpmInstallSpec(platform: NodeJS.Platform = process.platform): NpmInstallSpec {
+  const isWindows = platform === "win32";
+  return {
+    command: "npm",
+    args: ["install", "-g", "ringly@latest"],
+    options: {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      shell: isWindows,
+    },
+  };
+}
+
 async function runNpmInstallLatest(): Promise<InstallResult> {
   return await new Promise<InstallResult>((resolve) => {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
 
-    const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-    const child = spawn(npmCommand, ["install", "-g", "ringly@latest"], {
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-      shell: false,
-    });
+    const spec = buildNpmInstallSpec();
+    const child = spawn(spec.command, [...spec.args], spec.options);
 
     const timer = setTimeout(() => {
       timedOut = true;
@@ -199,10 +227,13 @@ async function runNpmInstallLatest(): Promise<InstallResult> {
       }
     }, NPM_INSTALL_TIMEOUT_MS);
 
-    child.stdout.on("data", (chunk: Buffer) => {
+    // stdio is hardcoded to ["ignore", "pipe", "pipe"] in buildNpmInstallSpec,
+    // so stdout/stderr exist at runtime. Optional chaining keeps the call
+    // safe even if TS widens the type when SpawnOptions is passed in.
+    child.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
     });
-    child.stderr.on("data", (chunk: Buffer) => {
+    child.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
     });
 
