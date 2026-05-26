@@ -8,7 +8,14 @@ This is the **plugin layer** of Ringly. It registers four hooks
 
 1. Tries to delegate to the `ringly` Node.js package (richer translation, logs, config),
 2. Falls back to spawning the `ringly` CLI binary if installed globally,
-3. Falls back to an **embedded toast** so the plugin alone keeps working without the npm package.
+3. Falls back to an **embedded toast** as a last resort.
+
+> ⚠️ **This plugin is not standalone.** On Windows 11, the
+> `ToastNotificationManager` only displays toasts from apps with a registered
+> AUMID, and that registration is performed exclusively by `ringly init` (from
+> the companion npm package). Installing only the plugin will at best play a
+> fallback beep. Always install the CLI first — see the repository README for
+> the full two-step flow.
 
 See the top-level `README.md` of the [Ringly repository](https://github.com/nickdevcode/Ringly)
 for full installation and configuration instructions.
@@ -24,7 +31,10 @@ by the dispatcher on every hook invocation — no restart required.
 - `sound`: enables or disables notification sound
 - `debug`: writes detailed logs
 
-For the best experience, also install the optional CLI:
+### Required companion CLI
+
+Install **before** the plugin so the AUMID is in place by the time the first
+hook fires:
 
 ```bash
 npm install -g ringly

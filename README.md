@@ -18,15 +18,22 @@ a notificações nativas do sistema operacional, com mensagens traduzidas e cont
 pelo nome do projeto. Você nunca mais precisa ficar olhando o terminal pra saber o que o
 Claude está esperando de você.
 
-O projeto é distribuído em **duas camadas complementares**:
+O projeto é distribuído em **duas camadas complementares e obrigatórias**,
+nesta ordem:
 
-- **Plugin do Claude Code** (`/plugin install ringly@ringly`) — registra os hooks e traz
-  um fallback embutido para que as notificações funcionem mesmo sem nenhuma dependência
-  Node.js extra.
-- **Pacote npm `ringly`** — adiciona um instalador interativo (`ringly init`), um
-  diagnóstico (`ringly doctor`) e o motor de tradução completo.
+1. **Pacote npm `ringly`** (passo 1) — registra o **AUMID do Windows** (sem ele,
+   o Windows 11 silencia o toast nativo), instala o atalho no Menu Iniciar,
+   escreve a configuração inicial e fornece os utilitários `ringly doctor` /
+   `ringly config` / `ringly uninstall`.
+2. **Plugin do Claude Code** (passo 2) — registra os hooks (`Notification`,
+   `Stop`, `StopFailure`, `SubagentStop`) e roda o dispatcher que delega ao
+   módulo Node do `ringly` e, por fim, monta e dispara o toast usando o AUMID
+   já registrado no passo 1.
 
-Pra melhor experiência, instale os dois.
+> ⚠️ **Os dois passos são obrigatórios.** O plugin sozinho até roda o dispatcher,
+> mas no Windows 11 o `ToastNotificationManager` exige um AUMID registrado para
+> exibir notificações na Central de Ações — esse registro é feito apenas pelo
+> `ringly init`. Sem ele, você ouve no máximo um beep de fallback (ou nada).
 
 ### Status
 
@@ -43,7 +50,26 @@ macOS e Linux têm os back-ends estruturados e estão planejados para a próxima
 
 ### Instalação
 
-#### Opção A — só o plugin (zero dependências)
+A instalação é feita em **dois passos**. Pule um e o toast nativo não vai
+aparecer no Windows 11 — não é uma escolha, é uma exigência do próprio sistema
+operacional (veja a nota acima sobre o AUMID).
+
+#### Passo 1 — Instalar a CLI `ringly` (registra o AUMID)
+
+```bash
+npm install -g ringly
+ringly init
+```
+
+O instalador interativo:
+
+- registra o **AUMID `Claude.Code.CLI`** no Windows (obrigatório para que o
+  `ToastNotificationManager` autorize o toast),
+- cria o atalho no Menu Iniciar amarrado a esse AUMID,
+- salva a configuração no `~/.claude/settings.json` (com backup automático),
+- imprime o comando exato do passo 2 pra você colar no Claude Code.
+
+#### Passo 2 — Instalar o plugin no Claude Code (registra os hooks)
 
 Dentro do Claude Code:
 
@@ -52,21 +78,10 @@ Dentro do Claude Code:
 /plugin install ringly@ringly
 ```
 
-O plugin inclui um dispatcher embutido, então as notificações já funcionam no Windows 11.
-Configure idioma, eventos habilitados, som e debug pela própria UI do gerenciador de plugins.
-
-#### Opção B — plugin + CLI npm (recomendado)
-
-```bash
-npm install -g ringly
-ringly init
-```
-
-O instalador interativo registra o AUMID do Windows (obrigatório para o toast nativo
-aparecer), salva a configuração no local padrão do sistema e mostra o comando exato
-para você colar dentro do Claude Code.
-
-Depois, instale o plugin como na Opção A. As duas camadas se reconhecem automaticamente.
+O plugin registra os hooks (`Notification`, `Stop`, `StopFailure`, `SubagentStop`)
+e o dispatcher embutido passa a usar o AUMID já registrado no passo 1. A partir
+daí, configure idioma, eventos, som e debug pelo gerenciador de plugins, por
+`ringly config` (TUI), ou editando `~/.claude/settings.json` direto.
 
 ### Atualizando
 
@@ -156,10 +171,14 @@ manualmente.
 3. O `dispatch.mjs` lê o `~/.claude/settings.json` e checa as opções do Ringly. Se o evento
    estiver desabilitado pelo usuário, o dispatcher encerra silenciosamente — sem disparar nada.
 4. Caso o evento esteja habilitado, o dispatcher lê o payload JSON via stdin e tenta, nessa ordem:
-   - o módulo Node `ringly/hook` (melhor tradução, contexto de projeto),
-   - o binário `ringly` no PATH,
-   - um fallback embutido que só depende de PowerShell + WinRT (e que respeita idioma e `sound`
-     do `settings.json` também).
+   - **o módulo Node `ringly/hook`** — caminho normal quando a CLI foi instalada
+     (passo 1 da instalação). Traz a tradução mais rica e contexto de projeto.
+   - **o binário `ringly` no PATH** — usado quando o módulo não é resolvido pelo
+     `require` mas a CLI existe globalmente.
+   - **um fallback embutido em PowerShell + WinRT** — último recurso, só dispara
+     se os dois anteriores falharem. Como o AUMID `Claude.Code.CLI` precisa estar
+     registrado pelo `ringly init`, esse fallback **não substitui o passo 1**:
+     sem CLI, ele toca no máximo um beep e sai.
 5. No Windows, o toast é gerado como XML e exibido via o AUMID registrado
    `Claude.Code.CLI`. Um beep é tocado como fallback se o Modo Foco ou Não Perturbe
    estiverem bloqueando as notificações.
@@ -191,14 +210,21 @@ Repositório: [github.com/nickdevcode/Ringly](https://github.com/nickdevcode/Rin
 `SubagentStop`) to native operating-system notifications, with translated, project-aware
 messages so you always know what Claude needs from you without staring at your terminal.
 
-It is distributed in **two complementary pieces**:
+It is distributed as **two complementary layers, both required**, in this order:
 
-- **Claude Code plugin** (`/plugin install ringly@ringly`) — wires up the hooks and
-  ships an embedded fallback so notifications work even without Node.js dependencies.
-- **`ringly` npm package** — adds an interactive installer (`ringly init`), a
-  diagnostic tool (`ringly doctor`), and the full translation engine.
+1. **`ringly` npm package** (step 1) — registers the **Windows AUMID** (without
+   it Windows 11 silently drops the native toast), installs the Start Menu
+   shortcut, writes the initial configuration, and ships the `ringly doctor` /
+   `ringly config` / `ringly uninstall` utilities.
+2. **Claude Code plugin** (step 2) — registers the hooks (`Notification`,
+   `Stop`, `StopFailure`, `SubagentStop`) and runs the dispatcher that delegates
+   to the `ringly` Node module and ultimately builds and shows the toast using
+   the AUMID already registered in step 1.
 
-For the best experience, install both.
+> ⚠️ **Both steps are required.** The plugin alone runs the dispatcher, but on
+> Windows 11 `ToastNotificationManager` only displays notifications from apps
+> with a registered AUMID — and that registration is performed exclusively by
+> `ringly init`. Skip it and you'll get a fallback beep at best, nothing at worst.
 
 ### Status
 
@@ -215,7 +241,26 @@ macOS and Linux toast back-ends are scaffolded and planned for the next release.
 
 ### Installation
 
-#### Option A — Plugin only (zero dependencies)
+Installation is a **two-step** process. Skip either one and native toasts won't
+show up on Windows 11 — this isn't a choice, it's an OS-level requirement (see
+the note above about the AUMID).
+
+#### Step 1 — Install the `ringly` CLI (registers the AUMID)
+
+```bash
+npm install -g ringly
+ringly init
+```
+
+The interactive installer:
+
+- registers the **`Claude.Code.CLI` AUMID** on Windows (required for
+  `ToastNotificationManager` to authorize the toast),
+- creates a Start Menu shortcut bound to that AUMID,
+- writes the configuration to `~/.claude/settings.json` (with an automatic backup),
+- prints the exact step 2 command to paste into Claude Code.
+
+#### Step 2 — Install the plugin inside Claude Code (registers the hooks)
 
 Inside Claude Code:
 
@@ -224,23 +269,10 @@ Inside Claude Code:
 /plugin install ringly@ringly
 ```
 
-The plugin includes an embedded toast dispatcher, so notifications work right away on
-Windows 11. Configure language, enabled events, sound, and debug from the plugin
-manager UI.
-
-#### Option B — Plugin + npm CLI (recommended)
-
-```bash
-npm install -g ringly
-ringly init
-```
-
-The interactive installer registers the Windows AUMID (required for native toasts to
-appear), writes configuration to your OS standard location, and prints the exact slash
-command to install the plugin.
-
-After that, install the plugin as in Option A. Both layers will talk to each other
-automatically.
+The plugin registers the hooks (`Notification`, `Stop`, `StopFailure`,
+`SubagentStop`) and the embedded dispatcher uses the AUMID registered in step 1.
+From here, tweak language, events, sound, and debug via the plugin manager,
+`ringly config` (TUI), or by editing `~/.claude/settings.json` directly.
 
 ### Updating
 
@@ -329,10 +361,15 @@ Ringly **never destroys anything**: the original `settings.json` is moved to
 3. `dispatch.mjs` reads `~/.claude/settings.json` and checks your Ringly options. If the event
    is disabled, the dispatcher exits silently — nothing is fired.
 4. If the event is enabled, the dispatcher reads the JSON payload from stdin and tries, in order:
-   - the `ringly/hook` Node module (best translations, project-aware),
-   - the `ringly` CLI binary on the PATH,
-   - an embedded fallback that only depends on PowerShell + WinRT (and that respects your
-     language and `sound` settings from `settings.json` too).
+   - **the `ringly/hook` Node module** — the normal path once the CLI has been
+     installed (step 1 of the installation). Ships the richest translations and
+     project-aware context.
+   - **the `ringly` CLI binary on PATH** — used when `require` can't resolve the
+     module but the CLI is installed globally.
+   - **an embedded PowerShell + WinRT fallback** — last resort, only fires if
+     the two above failed. Because the `Claude.Code.CLI` AUMID has to be
+     registered by `ringly init`, this fallback **does not replace step 1**:
+     without the CLI it plays a beep at best and exits.
 5. On Windows, the toast is generated as XML and shown via the registered
    AUMID `Claude.Code.CLI`. A beep is played as a fallback if Focus Assist or
    Do Not Disturb is blocking notifications.
