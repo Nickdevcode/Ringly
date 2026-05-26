@@ -5,6 +5,32 @@
 
 ---
 
+## [0.2.4] — 2026-05-26
+
+### 🇧🇷 Português
+
+**Corrigido**
+
+- **Notificações silenciosamente bloqueadas no Windows 11 / PowerShell 5.1.** Em vários setups (especialmente Claude Code instalado via npm global e AUMID registrado por shortcut), o toast nunca aparecia visualmente — só tocava um `beep` curto. A causa raiz é um bug conhecido do PowerShell ([PowerShell#9816](https://github.com/PowerShell/PowerShell/issues/9816)): objetos WinRT implementam `IInspectable` mas não `IDispatch`, fazendo com que `$notifier.Setting` retorne um enum mal-tipado quando comparado com `[NotificationSetting]::Enabled` ou concatenado em string. O resultado era um falso positivo de `BLOCKED:` (com valor vazio nos logs) que abortava o `Show()` antes mesmo da notificação ser disparada. Agora a checagem usa `$notifier.Setting.value__` (campo intrínseco de qualquer enum .NET, acessado diretamente sem passar pelo COM adapter quebrado) e compara com o inteiro `0`. Se a leitura falhar por qualquer motivo, o código segue em frente e tenta o `Show()` — qualquer erro real cai no `catch` com mensagem útil em vez de um bloqueio fantasma.
+- **Fallback `[Console]::Beep(800, 200)` removido do caminho de bloqueio.** Esse beep curto estava sendo emitido quando a checagem dava falso positivo e confundia o usuário (parecia que a notificação tinha chegado, mas era só o beep). Quando o toast é realmente bloqueado por configuração do sistema, agora o CLI retorna `BLOCKED:` com o motivo legível (`DisabledForApplication`, `DisabledForUser`, `DisabledByGroupPolicy`, `DisabledByManifest`) sem emitir nenhum som.
+
+**Adicionado**
+
+- **Testes para `ps-templates.ts`** garantindo que a nova checagem robusta está presente no script gerado, que o beep enganoso foi removido, e que o escape de aspas simples funciona em AUMID, XML e shortcut path.
+
+### 🇺🇸 English
+
+**Fixed**
+
+- **Silently blocked notifications on Windows 11 / PowerShell 5.1.** On several setups (especially Claude Code installed via npm global with AUMID registered through a shortcut), the toast never appeared visually — only a short `beep` played. The root cause is a known PowerShell bug ([PowerShell#9816](https://github.com/PowerShell/PowerShell/issues/9816)): WinRT objects implement `IInspectable` but not `IDispatch`, which makes `$notifier.Setting` return a mis-typed enum when compared with `[NotificationSetting]::Enabled` or concatenated into a string. The result was a false-positive `BLOCKED:` (with empty value in the logs) that aborted `Show()` before the notification was even dispatched. The check now reads `$notifier.Setting.value__` (the intrinsic backing field of any .NET enum, accessed directly without going through the broken COM adapter) and compares against integer `0`. If the read fails for any reason, the code proceeds and calls `Show()` anyway — any real error falls into the `catch` with a meaningful message rather than a phantom block.
+- **Removed the `[Console]::Beep(800, 200)` fallback on the blocked path.** That short beep was being emitted whenever the check false-positived and misled the user (it sounded like the notification had arrived, but it was just the beep). When the toast is genuinely blocked by system configuration, the CLI now returns `BLOCKED:` with a readable reason (`DisabledForApplication`, `DisabledForUser`, `DisabledByGroupPolicy`, `DisabledByManifest`) without emitting any sound.
+
+**Added**
+
+- **Tests for `ps-templates.ts`** ensuring the new robust check is present in the generated script, that the misleading beep was removed, and that single-quote escaping works for AUMID, XML, and shortcut path.
+
+---
+
 ## [0.2.1] — 2026-05-25
 
 ### 🇧🇷 Português

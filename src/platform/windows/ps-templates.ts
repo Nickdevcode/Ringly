@@ -24,9 +24,21 @@ try {
     $appId = '${safeAppId}'
     $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId)
 
-    if ($notifier.Setting -ne [Windows.UI.Notifications.NotificationSetting]::Enabled) {
-        Write-Output ('BLOCKED:' + $notifier.Setting)
-        try { [Console]::Beep(800, 200) } catch { }
+    $settingInt = $null
+    try { $settingInt = [int]$notifier.Setting.value__ } catch { }
+    if ($null -eq $settingInt) {
+        try { $settingInt = [int]$notifier.Setting } catch { }
+    }
+
+    if ($null -ne $settingInt -and $settingInt -ne 0) {
+        $reason = switch ($settingInt) {
+            1 { 'DisabledForApplication' }
+            2 { 'DisabledForUser' }
+            3 { 'DisabledByGroupPolicy' }
+            4 { 'DisabledByManifest' }
+            default { "Unknown($settingInt)" }
+        }
+        Write-Output ('BLOCKED:' + $reason)
         exit 0
     }
 
