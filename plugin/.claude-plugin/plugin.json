@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "ringly",
   "displayName": "Ringly",
-  "version": "0.4.0",
-  "description": "Ringly — native cross-platform notifications for Claude Code with i18n (pt-BR / en-US)",
+  "version": "0.5.0",
+  "description": "Ringly — native cross-platform notifications for Claude Code with i18n (pt-BR / en-US). Configure with the `ringly config` CLI (the Claude Code plugin manager UI is intentionally not used).",
   "author": {
     "name": "Nicolas Carvalho",
     "email": "nickcarva31@gmail.com"
@@ -18,55 +18,5 @@
     "i18n",
     "claude-code",
     "ringly"
-  ],
-  "userConfig": {
-    "language": {
-      "type": "string",
-      "title": "Language (tip: run `ringly config` for a visual picker)",
-      "description": "Type exactly: auto, pt-BR, or en-US. For a friendlier UI with arrow-key selection, run `ringly config` in your terminal.",
-      "default": "auto"
-    },
-    "events_notification": {
-      "type": "boolean",
-      "title": "Notify on Notification events",
-      "description": "Toast when Claude requests permission or input. Toggle with Space.",
-      "default": true
-    },
-    "events_stop": {
-      "type": "boolean",
-      "title": "Notify on Stop events",
-      "description": "Toast when Claude finishes a response. Toggle with Space.",
-      "default": true
-    },
-    "events_stopFailure": {
-      "type": "boolean",
-      "title": "Notify on StopFailure events",
-      "description": "Toast when an API error ends the session. Toggle with Space.",
-      "default": true
-    },
-    "events_subagentStop": {
-      "type": "boolean",
-      "title": "Notify on SubagentStop events",
-      "description": "Toast when a subagent finishes. Toggle with Space.",
-      "default": false
-    },
-    "sound": {
-      "type": "boolean",
-      "title": "Play sound",
-      "description": "Play a sound with each notification. Toggle with Space.",
-      "default": true
-    },
-    "debug": {
-      "type": "boolean",
-      "title": "Debug logging",
-      "description": "Write detailed logs to %APPDATA%/ringly/Log (or the OS standard log dir). Toggle with Space.",
-      "default": false
-    },
-    "check_updates": {
-      "type": "boolean",
-      "title": "Check for updates automatically",
-      "description": "Once a day, check npm for a newer Ringly release and notify via toast. Toggle with Space.",
-      "default": true
-    }
-  }
+  ]
 }

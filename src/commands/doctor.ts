@@ -190,7 +190,6 @@ function checkPluginOptions(translator: Translator): CheckResult {
       level: "warn",
       detail: translator.t("cli.doctor.check.plugin.notfound", { file }),
       hint: translator.t("cli.doctor.check.plugin.notfound_hint", {
-        plugin: "`/plugin`",
         command: "`ringly config`",
       }),
     };
@@ -203,7 +202,6 @@ function checkPluginOptions(translator: Translator): CheckResult {
       level: "warn",
       detail: translator.t("cli.doctor.check.plugin.nooptions"),
       hint: translator.t("cli.doctor.check.plugin.nooptions_hint", {
-        plugin: "`/plugin`",
         command: "`ringly config`",
       }),
     };

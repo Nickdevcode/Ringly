@@ -80,8 +80,10 @@ Dentro do Claude Code:
 
 O plugin registra os hooks (`Notification`, `Stop`, `StopFailure`, `SubagentStop`)
 e o dispatcher embutido passa a usar o AUMID já registrado no passo 1. A partir
-daí, configure idioma, eventos, som e debug pelo gerenciador de plugins, por
-`ringly config` (TUI), ou editando `~/.claude/settings.json` direto.
+daí, configure idioma, eventos, som e debug pelo `ringly config` (TUI) ou
+editando `~/.claude/settings.json` direto — a partir da v0.5.0 o Ringly **não**
+expõe mais uma tela no gerenciador de plugins do Claude Code (veja a seção
+[Configuração](#configuração) para o porquê).
 
 ### Atualizando
 
@@ -121,35 +123,54 @@ dentro do Claude Code se quiser puxar manualmente.
 
 A checagem é throttled a uma request por dia, não envia nada além da consulta
 pública ao npm e respeita o opt-out. Pra desligar, marque `check_updates: false`
-nas opções do plugin (via `ringly config`, plugin manager ou editando
-`~/.claude/settings.json`).
+rodando `ringly config` ou editando `~/.claude/settings.json` direto.
 
 ### Configuração
 
-> **Importante:** o **plugin manager do Claude Code é a fonte de verdade**. Toda configuração do Ringly fica em `~/.claude/settings.json` sob a chave `pluginConfigs.ringly.options` — exatamente como a Anthropic recomenda para qualquer plugin.
+> **A partir da v0.5.0, o Ringly é configurado exclusivamente pela CLI.** O `plugin.json` **não declara mais um `userConfig`**, então a tela `/plugin` → Installed → Ringly → Configure do Claude Code **não aparece de propósito**. Mais sobre o porquê logo abaixo.
 
-#### Três formas de configurar (todas escrevem no mesmo lugar)
+#### Por que não usar o gerenciador de plugins do Claude Code
+
+Até a v0.4.x o Ringly aparecia no `/plugin` manager nativo. Na prática a UX era
+ruim e cheia de armadilhas que vinham do próprio gerenciador, não do nosso plugin:
+
+- **O campo `language` era um input de texto livre.** O schema oficial do
+  `userConfig` ([documentado pela Anthropic em `code.claude.com`](https://code.claude.com/docs/en/plugins-reference#user-configuration)) só permite `string`/`number`/`boolean`/`directory`/`file` — não tem suporte a enum. Resultado: o usuário precisava digitar `pt-BR` ou `en-US` letra por letra (com hífen), e um typo virava `auto` silenciosamente.
+- **`Enter` em booleano não toggle.** No plugin manager, `Enter` apenas confirma a navegação entre campos. Pra alternar um boolean você precisava lembrar de apertar `Space`. Várias pessoas reportaram "marquei a opção mas continuou ligada".
+- **Sem validação visual, sem confirmação atômica.** O plugin manager grava direto em `~/.claude/settings.json` sem backup explícito e sem aviso de `/reload-plugins`.
+
+Nada disso é culpa do Claude Code — o `userConfig` é um schema genérico e
+funciona bem pra plugins simples (uma URL, um token). Pro caso do Ringly (idioma
+com enum, 7 toggles, contexto de "isso vai disparar notificações no seu SO"), o
+custo da UX ruim era maior do que o ganho de ter uma tela nativa.
+
+A solução técnica seria pedir pra Anthropic adicionar `enum` e `Enter`-toggle no
+schema. Enquanto isso não acontece, optamos por **remover o `userConfig`
+completamente** em vez de fingir que a UX é boa.
+
+#### Como configurar (única forma oficial)
 
 | Forma                                                       | Quando usar                                          |
 | ----------------------------------------------------------- | ---------------------------------------------------- |
-| **`ringly config`** — TUI bonita no terminal (✨ recomendado) | Melhor experiência: setas pra navegar, espaço pra toggle, seletor visual de idioma. Escreve no `settings.json` por você e lembra de rodar `/reload-plugins` ao final. |
-| **Editar `settings.json` manualmente**                      | Para automação/CI. Sempre rode `/reload-plugins` depois. |
-| **Plugin manager** — `/plugin` → Installed → Ringly         | Forma oficial nativa do Claude Code. **Limitação atual**: o campo `language` é renderizado como input de texto livre (o schema oficial não suporta enum), e `Enter` em booleanos só navega entre campos — use `Space` para alternar. Para uma UX bem mais agradável, prefira `ringly config`. |
+| **`ringly config`** — TUI bonita no terminal (✨ recomendado) | Melhor experiência: setas pra navegar, espaço pra toggle, seletor visual de idioma. Escreve no `settings.json` por você (atomic + backup com timestamp) e lembra de rodar `/reload-plugins` ao final. |
+| **Editar `settings.json` manualmente**                      | Para automação/CI. As chaves ficam em `pluginConfigs.ringly.options` (veja [Opções disponíveis](#opções-disponíveis)). Sempre rode `/reload-plugins` depois. |
+| **`ringly init`**                                           | Roda o instalador interativo de novo (com banner, registro de AUMID, setup completo). Use quando estiver reinstalando ou se o `settings.json` foi apagado. |
+
+> Se você procurar pelo Ringly em `/plugin → Installed`, o plugin aparece lá
+> (ele está **instalado** — os hooks estão registrados), mas o item **Configure**
+> simplesmente não existe pro Ringly. Isso é proposital, não bug.
 
 #### Como o Ringly resolve a configuração em runtime
 
 O dispatcher dos hooks lê, **nesta ordem de prioridade**:
 
-1. **`~/.claude/settings.json` → `pluginConfigs.ringly.options`** — fonte primária. O Ringly lê esse arquivo diretamente no início de cada hook, então qualquer mudança feita pelo plugin manager do Claude Code ou por `ringly config` é aplicada imediatamente, sem precisar de restart.
-2. **`config.json` local** (`%APPDATA%\ringly\config.json` no Windows, `~/.config/ringly` no Linux, `~/Library/Application Support/ringly` no macOS) — fallback usado apenas quando o `settings.json` não tem a chave `pluginConfigs.ringly`. Mantido para compatibilidade com instalações pré-0.2.1.
-3. **Variáveis de ambiente `RINGLY_DEBUG=1` e `CLAUDE_PLUGIN_OPTION_DEBUG=true`** — apenas para forçar logs detalhados durante diagnóstico, sem persistir nada.
-4. **Defaults internos** — última camada.
-
-> O Claude Code **não exporta** as opções de `pluginConfigs` como variáveis de ambiente para os hooks. Por isso o Ringly precisa ler o `settings.json` diretamente. Sempre que possível, use o plugin manager ou `ringly config` — eles cuidam de fazer backup do arquivo antes de cada gravação.
+1. **`~/.claude/settings.json` → `pluginConfigs.ringly.options`** — fonte única em estado estável. O Ringly lê esse arquivo diretamente no início de cada hook, então qualquer mudança feita por `ringly config` é aplicada imediatamente, sem precisar de restart.
+2. **Variáveis de ambiente `RINGLY_DEBUG=1` e `CLAUDE_PLUGIN_OPTION_*`** — overrides voláteis. As `CLAUDE_PLUGIN_OPTION_*` continuam sendo lidas como override opcional (útil pra forçar `debug=true` por uma única sessão sem persistir nada), mas o Claude Code **não exporta mais nada automaticamente** já que o `userConfig` foi removido. Você precisa setar essas variáveis manualmente no seu shell se quiser usar.
+3. **Defaults internos** — última camada.
 
 #### Opções disponíveis
 
-As chaves abaixo correspondem ao `userConfig` declarado no `plugin.json` e ficam todas em `pluginConfigs.ringly.options` dentro de `~/.claude/settings.json`.
+As chaves abaixo ficam em `pluginConfigs.ringly.options` dentro de `~/.claude/settings.json`. O `ringly config` cria/edita todas elas pra você.
 
 | Chave                 | Tipo                  | Padrão | Descrição                                             |
 | --------------------- | --------------------- | :----: | ----------------------------------------------------- |
@@ -290,8 +311,10 @@ Inside Claude Code:
 
 The plugin registers the hooks (`Notification`, `Stop`, `StopFailure`,
 `SubagentStop`) and the embedded dispatcher uses the AUMID registered in step 1.
-From here, tweak language, events, sound, and debug via the plugin manager,
-`ringly config` (TUI), or by editing `~/.claude/settings.json` directly.
+From here, tweak language, events, sound, and debug via `ringly config` (TUI)
+or by editing `~/.claude/settings.json` directly — starting with v0.5.0 the
+plugin no longer exposes a Claude Code plugin-manager screen (see the
+[Configuration](#configuration) section for why).
 
 ### Updating
 
@@ -330,36 +353,67 @@ refresh with `/plugin marketplace update` if you want it now.
 #### Disabling the automatic check
 
 The check is throttled to one request per day, only hits the public npm
-registry, and respects opt-out. To disable it, set `check_updates: false` in
-the plugin options (via `ringly config`, the plugin manager, or by editing
-`~/.claude/settings.json` directly).
+registry, and respects opt-out. To disable it, set `check_updates: false` by
+running `ringly config` or editing `~/.claude/settings.json` directly.
 
 ### Configuration
 
-> **Important:** the **Claude Code plugin manager is the source of truth**. All Ringly settings live in `~/.claude/settings.json` under `pluginConfigs.ringly.options` — exactly how Anthropic recommends for every plugin.
+> **As of v0.5.0, Ringly is configured exclusively from the CLI.** The
+> `plugin.json` **no longer declares a `userConfig` block**, so Claude Code's
+> `/plugin` → Installed → Ringly → Configure screen **does not appear by
+> design**. Read on for why.
 
-#### Three ways to configure (all write to the same file)
+#### Why we don't use Claude Code's plugin manager
+
+Up to v0.4.x Ringly showed up in `/plugin`'s native configuration UI. In
+practice the UX was full of footguns that came from the manager itself, not
+from our plugin:
+
+- **The `language` field was a free-text input.** The official `userConfig`
+  schema ([documented by Anthropic at `code.claude.com`](https://code.claude.com/docs/en/plugins-reference#user-configuration))
+  only supports `string` / `number` / `boolean` / `directory` / `file` — no
+  enum support. Users had to type `pt-BR` or `en-US` letter-by-letter (with the
+  dash) and a typo silently fell back to `auto`.
+- **`Enter` on a boolean does not toggle it.** Inside the plugin manager,
+  `Enter` only confirms field navigation — you had to remember to press
+  `Space` to flip a boolean. Plenty of folks reported "I unchecked it and it
+  was still on".
+- **No visual validation, no atomic-write confirmation.** The plugin manager
+  writes directly to `~/.claude/settings.json` with no explicit backup and no
+  reminder to run `/reload-plugins`.
+
+None of this is the Claude Code team's fault — `userConfig` is a deliberately
+minimal schema that fits simple plugins (one URL, one token). For Ringly's
+shape (enum language, seven toggles, "this fires OS notifications" context)
+the bad UX outweighed the upside of a native screen.
+
+The technical fix would be to ask Anthropic to add `enum` and `Enter`-toggle
+to the schema. Until that lands, we chose to **drop `userConfig` entirely**
+rather than pretend the experience is fine.
+
+#### How to configure (the only supported flow)
 
 | Method                                                      | When to use                                                |
 | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| **`ringly config`** — slick TUI in your terminal (✨ recommended) | Best experience: arrow keys to navigate, space to toggle, visual language picker. Writes into `settings.json` for you and reminds you to run `/reload-plugins` at the end. |
-| **Edit `settings.json` directly**                           | Best for automation/CI. Always run `/reload-plugins` after. |
-| **Plugin manager** — `/plugin` → Installed → Ringly         | Official native flow inside Claude Code. **Current limitation**: the `language` field is rendered as a free-text input (the official schema does not support enum), and `Enter` on booleans only moves between fields — use `Space` to toggle. For a much smoother UX, prefer `ringly config`. |
+| **`ringly config`** — slick TUI in your terminal (✨ recommended) | Best experience: arrow keys to navigate, space to toggle, visual language picker. Writes into `settings.json` for you (atomic + timestamped backup) and reminds you to run `/reload-plugins` at the end. |
+| **Edit `settings.json` directly**                           | Best for automation/CI. Keys live under `pluginConfigs.ringly.options` (see [Available settings](#available-settings)). Always run `/reload-plugins` after. |
+| **`ringly init`**                                           | Re-run the interactive installer (banner, AUMID register, full setup). Use it when reinstalling or if `settings.json` was wiped. |
+
+> If you search for Ringly under `/plugin → Installed`, the plugin shows up
+> there (it **is** installed — hooks are registered), but the **Configure**
+> entry simply does not exist for Ringly. That's intentional, not a bug.
 
 #### How Ringly resolves the config at runtime
 
 The hook dispatcher reads, **in this priority order**:
 
-1. **`~/.claude/settings.json` → `pluginConfigs.ringly.options`** — primary source. Ringly reads this file directly at the start of every hook, so changes made through Claude Code's plugin manager or `ringly config` apply immediately, with no restart required.
-2. **Local `config.json`** (`%APPDATA%\ringly\config.json` on Windows, `~/.config/ringly` on Linux, `~/Library/Application Support/ringly` on macOS) — fallback used only when `settings.json` has no `pluginConfigs.ringly` entry. Kept for backwards compatibility with pre-0.2.1 installs.
-3. **Environment variables `RINGLY_DEBUG=1` and `CLAUDE_PLUGIN_OPTION_DEBUG=true`** — only to force verbose logging during diagnostics; nothing is persisted.
-4. **Built-in defaults** — final fallback.
-
-> Claude Code **does not export** `pluginConfigs` options as environment variables to hooks. That's why Ringly reads `settings.json` directly. Prefer the plugin manager or `ringly config` whenever possible — both take a backup of the file before writing.
+1. **`~/.claude/settings.json` → `pluginConfigs.ringly.options`** — the only persistent source. Ringly reads this file directly at the start of every hook, so changes made by `ringly config` apply immediately, with no restart required.
+2. **Environment variables `RINGLY_DEBUG=1` and `CLAUDE_PLUGIN_OPTION_*`** — volatile overrides. `CLAUDE_PLUGIN_OPTION_*` is still honoured as an optional override (useful to force `debug=true` for a single shell without persisting anything), but Claude Code **no longer exports anything on its own** now that `userConfig` is gone. You have to set these env vars yourself if you want them.
+3. **Built-in defaults** — final fallback.
 
 #### Available settings
 
-The keys below match the `userConfig` declared in `plugin.json` and live in `pluginConfigs.ringly.options` inside `~/.claude/settings.json`.
+The keys below live in `pluginConfigs.ringly.options` inside `~/.claude/settings.json`. `ringly config` creates/edits all of them for you.
 
 | Key                   | Type                   | Default | Description                                              |
 | --------------------- | ---------------------- | :-----: | -------------------------------------------------------- |

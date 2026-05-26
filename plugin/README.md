@@ -22,14 +22,29 @@ toast when a new version is available on npm.
 > fallback beep. Always install the CLI first — see the repository README for
 > the full two-step flow.
 
-See the top-level `README.md` of the [Ringly repository](https://github.com/nickdevcode/Ringly)
-for full installation and configuration instructions.
-
 ## Configuration
 
-This plugin exposes user-facing settings via the Claude Code plugin manager. Every option
-is stored in `~/.claude/settings.json` under `pluginConfigs.ringly.options` and is read
-by the dispatcher on every hook invocation — no restart required.
+> **Ringly is configured exclusively via the `ringly` CLI**, not via Claude
+> Code's `/plugin` configuration screen. Since v0.5.0 the plugin manifest
+> does not declare a `userConfig` block, so the **Installed → Ringly → Configure**
+> screen is intentionally absent. The plugin manager's read-only UX (free-text
+> language field, awkward `Space`-to-toggle on booleans) shipped a bad
+> experience for users; the CLI-only approach removes that path entirely.
+
+All settings live in `~/.claude/settings.json` under `pluginConfigs.ringly.options`
+and are read by the dispatcher on every hook invocation — no restart required.
+
+To change them, run one of:
+
+- `ringly config` — the recommended TUI configurator (arrow keys, Space to toggle,
+  visual language picker). Writes atomically, with backup, and reminds you to
+  run `/reload-plugins` at the end.
+- Edit `~/.claude/settings.json` directly under `pluginConfigs.ringly.options`,
+  then run `/reload-plugins`.
+- Inside Claude Code, the `/ringly-update` slash command handles updates and
+  reload prompts automatically.
+
+The recognised keys are:
 
 - `language`: `auto`, `pt-BR`, or `en-US`
 - `events_notification` / `events_stop` / `events_stopFailure` / `events_subagentStop`: toggle each hook

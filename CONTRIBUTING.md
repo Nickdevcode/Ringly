@@ -139,7 +139,7 @@ Só pra você entender o fluxo:
 ```
 Ringly/
 ├── plugin/                            # camada do plugin do Claude Code
-│   ├── .claude-plugin/plugin.json    # manifesto + userConfig (idioma, eventos, etc.)
+│   ├── .claude-plugin/plugin.json    # manifesto do plugin (sem userConfig — config é só via `ringly config`)
 │   ├── commands/
 │   │   └── ringly-update.md          # slash command /ringly-update
 │   └── hooks/
@@ -185,6 +185,25 @@ Por isso ele **duplica** lógica que existe em `src/`:
 `dispatch.mjs` também.** O CI lintificará ambos via Biome (`plugin/hooks/` está
 no `biome.json#includes`), mas mudanças de comportamento não são detectadas
 automaticamente.
+
+### Sobre o `plugin.json` sem `userConfig`
+
+A partir da v0.5.0 o `plugin/.claude-plugin/plugin.json` **propositalmente
+não declara `userConfig`**. Isso esconde a tela `/plugin` → Installed →
+Ringly → Configure do Claude Code. A motivação está documentada na seção
+"Configuração" do `README.md`, mas em resumo:
+
+- O schema de `userConfig` do Claude Code não tem suporte a `enum`, então o
+  campo `language` virava input de texto livre — qualquer typo silenciosamente
+  caía em `auto`.
+- Em booleanos do plugin manager, `Enter` apenas navega entre campos; só
+  `Space` toggla. Várias issues reportaram "desliguei e continuou ligado".
+- Não há atomic write nem aviso de `/reload-plugins`.
+
+**Antes de propor reintroduzir o `userConfig`**, confirme que a Anthropic
+adicionou suporte a `enum` no schema (veja
+[plugin reference oficial](https://code.claude.com/docs/en/plugins-reference#user-configuration))
+ou descreva na issue como resolver os pontos acima sem regressão de UX.
 
 ### Áreas que aceitam contribuição agora
 
@@ -344,7 +363,7 @@ For context, here's the flow:
 ```
 Ringly/
 ├── plugin/                            # Claude Code plugin layer
-│   ├── .claude-plugin/plugin.json    # manifest + userConfig (language, events, etc.)
+│   ├── .claude-plugin/plugin.json    # plugin manifest (no userConfig — config is CLI-only via `ringly config`)
 │   ├── commands/
 │   │   └── ringly-update.md          # /ringly-update slash command
 │   └── hooks/
@@ -389,6 +408,26 @@ Because of that it **duplicates** logic that also lives in `src/`:
 **If you change the version in `src/`, remember to change the matching version
 in `dispatch.mjs` too.** CI will lint both via Biome (`plugin/hooks/` is in
 `biome.json#includes`), but behavioral drift is not detected automatically.
+
+### About `plugin.json` with no `userConfig`
+
+Starting in v0.5.0, `plugin/.claude-plugin/plugin.json` **intentionally does
+not declare `userConfig`**. That hides the Claude Code `/plugin` → Installed
+→ Ringly → Configure screen. The full rationale lives in the README's
+"Configuration" section, but the short version:
+
+- Claude Code's `userConfig` schema has no `enum` support, so the `language`
+  field was a free-text input — any typo silently fell back to `auto`.
+- In the plugin manager UI, `Enter` on a boolean only navigates between
+  fields; only `Space` toggles. Several issues reported "I unchecked it and
+  it stayed on".
+- No atomic write, no reminder to run `/reload-plugins`.
+
+**Before proposing to bring `userConfig` back**, confirm Anthropic has added
+`enum` support to the schema (see the
+[official plugin reference](https://code.claude.com/docs/en/plugins-reference#user-configuration))
+or describe in your issue how to address the points above without regressing
+UX.
 
 ### Areas open for contribution right now
 

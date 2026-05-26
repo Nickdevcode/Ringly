@@ -5,6 +5,68 @@
 
 ---
 
+## [0.5.0] — 2026-05-26
+
+### 🇧🇷 Português
+
+**Mudança incompatível**
+
+- **Removido o `userConfig` do `plugin/.claude-plugin/plugin.json`.** Antes, o Claude Code expunha o Ringly em `/plugin` → Installed → Ringly → **Configure** com uma tela de configuração nativa. Essa tela vinha com três problemas conhecidos que não dependiam do nosso plugin e sim do schema oficial do Claude Code:
+  - O campo `language` era renderizado como input de texto livre — o schema [oficial do `userConfig`](https://code.claude.com/docs/en/plugins-reference#user-configuration) não suporta `enum`. Um typo no `pt-BR`/`en-US` virava `auto` silenciosamente.
+  - Em booleanos, `Enter` apenas navegava entre campos; só `Space` toggla. Vários usuários relataram "desliguei e continuou ligado".
+  - Sem atomic write nem aviso de `/reload-plugins`.
+  Como o time da Anthropic ainda não adicionou enum ao schema nem mudou o comportamento de `Enter`, removemos o `userConfig` por completo em vez de fingir que a UX estava boa. **A partir de agora, a configuração do Ringly é exclusivamente via CLI** — `ringly config` (TUI recomendada), edição manual do `~/.claude/settings.json` ou re-rodar `ringly init`. O plugin continua aparecendo em `/plugin → Installed` (os hooks seguem registrados), mas o item **Configure** simplesmente não existe pro Ringly. Quem já tinha valores em `pluginConfigs.ringly.options` **não perde nada**: o dispatcher e o `ringly config` continuam lendo e gravando exatamente as mesmas chaves. Só a UI nativa do plugin manager some.
+
+**Mudado**
+
+- **`displayName` e `description` do `plugin.json`** atualizados deixando claro que a configuração é via `ringly config` e não via plugin manager. Quem abrir o Ringly no marketplace já vê isso na descrição.
+- **Tela final do `ringly config` (TUI `ConfigDone`)** reescrita: a caixa "Você também pode configurar via `/plugin` → Installed → Ringly → Configure" foi substituída por uma nota "Configuração só pela CLI — o Ringly não usa a tela do plugin manager. Pra mudar de novo, rode `ringly config`." A caixa amarela de "rode `/reload-plugins`" continua igual.
+- **Hints do `ringly doctor`** que apontavam pra "abra `/plugin` no Claude Code → Installed → Ringly → Configure" agora apontam só pra `ringly config`. O check em si continua se chamando "Configuração do Ringly em `~/.claude/settings.json`" e segue validando a mesma chave `pluginConfigs.ringly.options` — só os textos de hint mudaram.
+- **Locales `pt-BR.json` e `en-US.json`** ganharam `tui.config.cli_only_title` e `tui.config.cli_only_body`; `tui.config.also_available` e `tui.config.plugin_path` foram **removidas** (não havia consumidor fora do ConfigDone reescrito). Os hints do doctor (`cli.doctor.check.plugin.notfound_hint` e `nooptions_hint`) foram reescritos pra não mencionar mais o plugin manager.
+
+**Docs**
+
+- **`README.md`** ganhou uma seção "Por que não usar o gerenciador de plugins do Claude Code" (pt-BR e en-US) explicando os três problemas acima, linkando direto pro [plugin reference oficial](https://code.claude.com/docs/en/plugins-reference#user-configuration) e deixando documentado que a remoção é intencional, não bug. A tabela "Três formas de configurar" virou "Como configurar (única forma oficial)" com três entradas (`ringly config`, edição manual, `ringly init` pra reinstalação). A seção "Como o Ringly resolve a config em runtime" foi simplificada: só duas camadas (settings.json + env vars de override) em vez de quatro.
+- **`plugin/README.md`** explica o mesmo, mais curto, com link pro repo principal.
+- **`CONTRIBUTING.md`** ganhou uma seção "Sobre o `plugin.json` sem `userConfig`" (pt-BR e en-US) pra que contribuidores não tentem reintroduzir o `userConfig` sem entender o contexto. A nota pede pra confirmar primeiro se a Anthropic já adicionou enum ao schema antes de propor a mudança.
+
+**Notas pra quem tá vindo da v0.4.0**
+
+- Nada quebra. `ringly config` continua funcionando idêntico, `ringly init` continua funcionando idêntico, `~/.claude/settings.json` continua sendo lido idêntico. A única coisa que muda é que a tela `/plugin → Installed → Ringly → Configure` deixa de existir.
+- Se você configurou alguma coisa pelo plugin manager na v0.4.x, esses valores estão em `pluginConfigs.ringly.options` no `settings.json` e seguem sendo respeitados — sem migração necessária.
+- Se quiser **reabrir** as configurações pra mudar agora que a tela sumiu, rode `ringly config` no terminal. Tem a TUI completa com setas, espaço pra toggle e seletor de idioma.
+
+### 🇺🇸 English
+
+**Breaking change**
+
+- **Removed `userConfig` from `plugin/.claude-plugin/plugin.json`.** Up to v0.4.x Claude Code exposed Ringly under `/plugin` → Installed → Ringly → **Configure** with a native settings screen. That screen shipped three known issues that came from Claude Code's official schema, not our plugin:
+  - The `language` field was rendered as a free-text input — the [official `userConfig` schema](https://code.claude.com/docs/en/plugins-reference#user-configuration) has no `enum` support. A typo on `pt-BR`/`en-US` silently fell back to `auto`.
+  - On booleans, `Enter` only navigated between fields; only `Space` actually toggled them. Several users reported "I unchecked it and it stayed on".
+  - No atomic write, no `/reload-plugins` reminder.
+  Until Anthropic adds enum support to the schema and fixes the `Enter` behaviour, we'd rather drop `userConfig` than pretend the UX was fine. **Configuration is now CLI-only** — `ringly config` (the recommended TUI), hand-editing `~/.claude/settings.json`, or re-running `ringly init`. The plugin still shows up under `/plugin → Installed` (hooks are still registered), but the **Configure** entry simply does not exist for Ringly anymore. Anyone with values already saved under `pluginConfigs.ringly.options` **loses nothing**: the dispatcher and `ringly config` keep reading and writing the exact same keys. Only the native plugin-manager UI is gone.
+
+**Changed**
+
+- **`displayName` and `description` in `plugin.json`** updated to make it explicit that configuration goes through `ringly config`, not the plugin manager. Anyone browsing the marketplace sees it right in the description.
+- **Final screen of `ringly config` (TUI `ConfigDone`)** rewritten: the "You can also configure via `/plugin` → Installed → Ringly → Configure" box was replaced with a "CLI-only configuration — Ringly does not use the plugin-manager screen. To change these settings later, run `ringly config` again." note. The yellow `/reload-plugins` reminder is unchanged.
+- **`ringly doctor` hints** that pointed at "open `/plugin` in Claude Code → Installed → Ringly → Configure" now point at `ringly config` only. The check itself is still called "Ringly settings in `~/.claude/settings.json`" and still validates the same `pluginConfigs.ringly.options` key — only the hint copy changed.
+- **`pt-BR.json` and `en-US.json` locales** gained `tui.config.cli_only_title` and `tui.config.cli_only_body`; `tui.config.also_available` and `tui.config.plugin_path` were **removed** (no consumer remained after the ConfigDone rewrite). Doctor hints (`cli.doctor.check.plugin.notfound_hint` and `nooptions_hint`) were rewritten to drop any mention of the plugin manager.
+
+**Docs**
+
+- **`README.md`** gained a "Why we don't use Claude Code's plugin manager" section (in both pt-BR and en-US) that explains the three problems above, links directly to the [official plugin reference](https://code.claude.com/docs/en/plugins-reference#user-configuration), and documents that the removal is intentional, not a bug. The "Three ways to configure" table became "How to configure (the only supported flow)" with three entries (`ringly config`, hand-edit, `ringly init` for reinstall). The "How Ringly resolves the config at runtime" section was simplified from four layers to two (settings.json + env-var overrides).
+- **`plugin/README.md`** says the same thing, shorter, linking back to the main repo.
+- **`CONTRIBUTING.md`** gained a "About `plugin.json` with no `userConfig`" section (pt-BR and en-US) so contributors don't try to reintroduce `userConfig` without context. The note asks them to first confirm Anthropic has added enum support before proposing the change.
+
+**Notes for v0.4.0 users**
+
+- Nothing breaks. `ringly config` keeps working identically, `ringly init` keeps working identically, `~/.claude/settings.json` keeps being read identically. The only thing that changes is that the `/plugin → Installed → Ringly → Configure` screen no longer exists.
+- If you configured anything via the plugin manager on v0.4.x, those values live in `pluginConfigs.ringly.options` in `settings.json` and are still honoured — no migration needed.
+- If you want to **reopen** the configurator now that the screen is gone, run `ringly config` in your terminal. You get the full TUI with arrow keys, space to toggle and a visual language picker.
+
+---
+
 ## [0.4.0] — 2026-05-26
 
 ### 🇧🇷 Português
@@ -371,7 +433,8 @@ First public release. Full Windows 11 support with pt-BR / en-US translation.
 
 ---
 
-[Unreleased]: https://github.com/nickdevcode/Ringly/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/nickdevcode/Ringly/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/nickdevcode/Ringly/releases/tag/v0.5.0
 [0.4.0]: https://github.com/nickdevcode/Ringly/releases/tag/v0.4.0
 [0.3.0]: https://github.com/nickdevcode/Ringly/releases/tag/v0.3.0
 [0.2.4]: https://github.com/nickdevcode/Ringly/releases/tag/v0.2.4
