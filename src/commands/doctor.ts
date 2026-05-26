@@ -1,8 +1,7 @@
 import { existsSync } from "node:fs";
 import chalk from "chalk";
 import { getClaudeSettingsFile, readRinglyPluginOptions } from "../core/claudeSettings.js";
-import { getConfigFile, loadConfig } from "../core/config.js";
-import { detectLegacy } from "../core/legacy.js";
+import { loadConfig } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { createTranslator, type Translator } from "../core/translator.js";
 import { detectPlatform } from "../platform/index.js";
@@ -56,8 +55,6 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<void> {
   }
 
   checks.push(checkPluginOptions(translator));
-  checks.push(checkConfigFile(translator));
-  checks.push(checkLegacy(translator));
 
   if (options.json) {
     console.log(JSON.stringify({ platform, checks }, null, 2));
@@ -185,39 +182,6 @@ async function checkAumid(translator: Translator): Promise<CheckResult> {
   };
 }
 
-/**
- * Reporta a presença do sistema PowerShell antigo (`notify-toast.ps1` em
- * `~/.claude/hooks/`). Quando ele coexiste com o Ringly, o usuário recebe
- * **duas** notificações pro mesmo evento. Aqui informamos o estado e
- * sugerimos o comando de migração.
- */
-function checkLegacy(translator: Translator): CheckResult {
-  const detection = detectLegacy();
-  const hooksCount = detection.hooksFound.length;
-  const scriptsCount = detection.scriptsFound.length;
-
-  if (hooksCount === 0 && scriptsCount === 0) {
-    return {
-      label: translator.t("cli.doctor.check.legacy"),
-      level: "ok",
-      detail: translator.t("cli.doctor.check.legacy.none"),
-    };
-  }
-
-  const parts: string[] = [];
-  if (hooksCount > 0) parts.push(`${hooksCount} hook(s): ${detection.hooksFound.join(", ")}`);
-  if (scriptsCount > 0) parts.push(`${scriptsCount} script(s)`);
-
-  return {
-    label: translator.t("cli.doctor.check.legacy"),
-    level: "warn",
-    detail: parts.join(" + "),
-    hint: translator.t("cli.doctor.check.legacy.hint", {
-      command: "`ringly uninstall --legacy`",
-    }),
-  };
-}
-
 function checkPluginOptions(translator: Translator): CheckResult {
   const file = getClaudeSettingsFile();
   if (!existsSync(file)) {
@@ -253,33 +217,6 @@ function checkPluginOptions(translator: Translator): CheckResult {
       language,
     }),
   };
-}
-
-function checkConfigFile(translator: Translator): CheckResult {
-  const file = getConfigFile();
-  const exists = existsSync(file);
-  if (!exists) {
-    return {
-      label: translator.t("cli.doctor.check.config"),
-      level: "ok",
-      detail: translator.t("cli.doctor.check.config.absent"),
-    };
-  }
-  try {
-    const config = loadConfig();
-    return {
-      label: translator.t("cli.doctor.check.config"),
-      level: "ok",
-      detail: translator.t("cli.doctor.check.config.ok", { file, language: config.language }),
-    };
-  } catch (err) {
-    return {
-      label: translator.t("cli.doctor.check.config"),
-      level: "fail",
-      detail: (err as Error).message,
-      hint: translator.t("cli.doctor.check.config.broken_hint", { command: "`ringly init`" }),
-    };
-  }
 }
 
 function printReport(translator: Translator, platform: string, checks: CheckResult[]): void {

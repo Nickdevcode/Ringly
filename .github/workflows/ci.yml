@@ -58,8 +58,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Lint
-        shell: bash
-        run: npx biome check src test bin scripts
+        run: npm run lint
 
       - name: Typecheck
         run: npm run typecheck
@@ -79,3 +78,15 @@ jobs:
           test -f dist/hook.js
           test -f dist/cli.d.ts
           test -f dist/hook.d.ts
+
+      - name: Smoke run CLI bundle
+        shell: bash
+        run: |
+          node dist/cli.js --version
+          node dist/cli.js --help > /dev/null
+
+      - name: Smoke run hook bundle
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          echo '{"hook_event_name":"Stop","cwd":"/tmp"}' | node dist/hook.js Stop

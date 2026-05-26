@@ -4,7 +4,7 @@ export interface ReadStdinOptions {
 }
 
 export async function readStdin(options: ReadStdinOptions = {}): Promise<string> {
-  const { timeoutMs = 4000, maxBytes = 10 * 1024 * 1024 } = options;
+  const { timeoutMs = 4000, maxBytes = 256 * 1024 } = options;
 
   if (process.stdin.isTTY) return "";
 

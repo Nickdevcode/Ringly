@@ -1,6 +1,16 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+} from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { atomicWriteFileSync } from "./atomicWrite.js";
 import { logger } from "./logger.js";
 import type { RinglyConfig } from "./types.js";
 
@@ -56,17 +66,46 @@ export interface SaveResult {
   wasCreated: boolean;
 }
 
+const BACKUP_SUFFIX = ".ringly-bak.";
+const BACKUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function pruneOldBackups(file: string): void {
+  const dir = dirname(file);
+  const prefix = `${basename(file)}${BACKUP_SUFFIX}`;
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return;
+  }
+  const now = Date.now();
+  for (const entry of entries) {
+    if (!entry.startsWith(prefix)) continue;
+    const fullPath = join(dir, entry);
+    try {
+      const stat = statSync(fullPath);
+      if (now - stat.mtimeMs > BACKUP_MAX_AGE_MS) {
+        unlinkSync(fullPath);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export function writeRinglyPluginOptions(options: RinglyPluginOptions): SaveResult {
   const file = getClaudeSettingsFile();
   const dir = dirname(file);
   mkdirSync(dir, { recursive: true });
+
+  pruneOldBackups(file);
 
   const wasCreated = !existsSync(file);
   let backupFile: string | null = null;
 
   if (!wasCreated) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    backupFile = `${file}.ringly-bak.${timestamp}`;
+    backupFile = `${file}${BACKUP_SUFFIX}${timestamp}`;
     try {
       copyFileSync(file, backupFile);
     } catch (err) {
@@ -88,7 +127,17 @@ export function writeRinglyPluginOptions(options: RinglyPluginOptions): SaveResu
   };
   nextSettings.pluginConfigs = pluginConfigs;
 
-  writeFileSync(file, `${JSON.stringify(nextSettings, null, 2)}\n`, { encoding: "utf8" });
+  atomicWriteFileSync(file, `${JSON.stringify(nextSettings, null, 2)}\n`);
+
+  if (process.platform !== "win32") {
+    try {
+      chmodSync(file, 0o600);
+    } catch (err) {
+      logger.warn("Failed to chmod 600 settings.json", {
+        message: (err as Error).message,
+      });
+    }
+  }
 
   return { file, backupFile, wasCreated };
 }
@@ -127,7 +176,32 @@ export function pluginOptionsToRinglyConfig(
   };
 }
 
-export function hasRinglyPluginOptions(): boolean {
-  const opts = readRinglyPluginOptions();
-  return Object.keys(opts).length > 0;
+export function removeRinglyPluginOptions(): boolean {
+  const file = getClaudeSettingsFile();
+  if (!existsSync(file)) return false;
+
+  const settings = readClaudeSettings();
+  if (!settings.pluginConfigs?.[PLUGIN_ID]) return false;
+
+  const nextPluginConfigs = { ...settings.pluginConfigs };
+  delete nextPluginConfigs[PLUGIN_ID];
+
+  const nextSettings: ClaudeSettings = { ...settings };
+  if (Object.keys(nextPluginConfigs).length === 0) {
+    delete nextSettings.pluginConfigs;
+  } else {
+    nextSettings.pluginConfigs = nextPluginConfigs;
+  }
+
+  atomicWriteFileSync(file, `${JSON.stringify(nextSettings, null, 2)}\n`);
+
+  if (process.platform !== "win32") {
+    try {
+      chmodSync(file, 0o600);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return true;
 }

@@ -17,8 +17,23 @@ export function resolveLanguage(setting: LanguageSetting): SupportedLanguage {
 }
 
 export function detectSystemLanguage(): SupportedLanguage {
+  const explicit = process.env["CLAUDE_PLUGIN_OPTION_LANGUAGE"];
+  if (typeof explicit === "string" && explicit.length > 0 && explicit.toLowerCase() !== "auto") {
+    if (explicit === "pt-BR" || explicit === "en-US") return explicit;
+    const normalized = explicit.toLowerCase();
+    if (normalized.startsWith("pt")) return "pt-BR";
+    if (normalized.startsWith("en")) return "en-US";
+  }
+
+  try {
+    const locale = new Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase();
+    if (locale.startsWith("pt")) return "pt-BR";
+    if (locale.startsWith("en")) return "en-US";
+  } catch {
+    /* ignore */
+  }
+
   const candidates = [
-    process.env["CLAUDE_PLUGIN_OPTION_LANGUAGE"],
     process.env["LANG"],
     process.env["LANGUAGE"],
     process.env["LC_ALL"],
@@ -30,14 +45,6 @@ export function detectSystemLanguage(): SupportedLanguage {
     const normalized = value.toLowerCase();
     if (normalized.startsWith("pt")) return "pt-BR";
     if (normalized.startsWith("en")) return "en-US";
-  }
-
-  try {
-    const locale = new Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase();
-    if (locale.startsWith("pt")) return "pt-BR";
-    if (locale.startsWith("en")) return "en-US";
-  } catch {
-    /* ignore */
   }
 
   return FALLBACK_LANGUAGE;

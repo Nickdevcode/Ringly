@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import envPaths from "env-paths";
@@ -6,6 +6,9 @@ import envPaths from "env-paths";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 const paths = envPaths("ringly", { suffix: "" });
+
+const MAX_LOG_BYTES = 5 * 1024 * 1024;
+const ROTATION_CHECK_INTERVAL_MS = 60 * 1000;
 
 function resolveLogDir(): string {
   const pluginData = process.env["CLAUDE_PLUGIN_DATA"];
@@ -33,6 +36,22 @@ function ensureDirOnce(dir: string): void {
   ensuredDirs.add(dir);
 }
 
+let lastRotationCheckMs = 0;
+
+function maybeRotate(file: string): void {
+  const now = Date.now();
+  if (now - lastRotationCheckMs < ROTATION_CHECK_INTERVAL_MS) return;
+  lastRotationCheckMs = now;
+  try {
+    const stat = statSync(file);
+    if (stat.size <= MAX_LOG_BYTES) return;
+    const rotated = `${file}.1`;
+    renameSync(file, rotated);
+  } catch {
+    /* file may not exist or rename failed; continue */
+  }
+}
+
 function writeLine(level: LogLevel, message: string, meta?: unknown): void {
   if (level === "debug" && !isDebugEnabled()) return;
 
@@ -43,6 +62,7 @@ function writeLine(level: LogLevel, message: string, meta?: unknown): void {
   try {
     const file = resolveLogFile();
     ensureDirOnce(dirname(file));
+    maybeRotate(file);
     appendFileSync(file, line, { encoding: "utf8" });
   } catch {
     try {

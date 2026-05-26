@@ -51,18 +51,12 @@ async function main(): Promise<void> {
             type: "boolean",
             default: false,
             describe: "Skip the TUI and apply defaults",
-          })
-          .option("migrate-legacy", {
-            type: "boolean",
-            default: false,
-            describe: "Disable pre-Ringly PowerShell hooks before setup",
           }),
       async (argv) => {
         const mod = await import("./commands/init.js");
         await mod.runInit({
           force: argv.force,
           nonInteractive: argv["non-interactive"],
-          migrateLegacy: argv["migrate-legacy"],
         });
       },
     )
@@ -88,22 +82,15 @@ async function main(): Promise<void> {
       "uninstall",
       "Remove the AUMID shortcut and local configuration",
       (b) =>
-        b
-          .option("keep-config", {
-            type: "boolean",
-            default: false,
-            describe: "Preserve %APPDATA%\\ringly\\config.json",
-          })
-          .option("legacy", {
-            type: "boolean",
-            default: false,
-            describe: "Also remove pre-Ringly PowerShell hooks from ~/.claude/",
-          }),
+        b.option("keep-config", {
+          type: "boolean",
+          default: false,
+          describe: "Preserve local Ringly configuration",
+        }),
       async (argv) => {
         const mod = await import("./commands/uninstall.js");
         await mod.runUninstall({
           keepConfig: argv["keep-config"],
-          legacy: argv.legacy,
         });
       },
     )

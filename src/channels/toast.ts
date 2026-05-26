@@ -18,7 +18,8 @@ export function createToastChannel(options: ToastChannelOptions = {}): Notificat
   return {
     name: "toast",
     async isAvailable() {
-      return detectPlatform() === "windows";
+      const platform = detectPlatform();
+      return platform === "windows" || platform === "macos" || platform === "linux";
     },
     async send(intent: NotificationIntent) {
       const sound: ToastSoundName = silent || !intent.sound ? "silent" : intent.soundName;

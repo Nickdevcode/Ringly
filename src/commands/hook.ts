@@ -1,6 +1,7 @@
 import { applyEnvOverrides, loadConfig } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { notify } from "../core/notifier.js";
+import { coerceClaudeHookPayload } from "../core/payloadGuards.js";
 import { readStdin, tryParseJson } from "../core/stdin.js";
 import type { ClaudeHookEventName, ClaudeHookPayload } from "../core/types.js";
 
@@ -18,7 +19,8 @@ export interface RunHookOptions {
 export async function runHook(options: RunHookOptions = {}): Promise<void> {
   try {
     const raw = await readStdin({ timeoutMs: 4000 });
-    const payload = (tryParseJson<ClaudeHookPayload>(raw) ?? {}) as ClaudeHookPayload;
+    const parsed = tryParseJson<unknown>(raw);
+    const payload: ClaudeHookPayload = coerceClaudeHookPayload(parsed);
 
     const event = pickEvent(options.forcedEvent, payload);
     if (!event) {

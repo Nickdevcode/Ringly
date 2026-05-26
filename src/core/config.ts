@@ -1,8 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import envPaths from "env-paths";
 import {
-  hasRinglyPluginOptions,
   pluginOptionsToRinglyConfig,
   readRinglyPluginOptions,
   ringlyConfigToPluginOptions,
@@ -10,16 +6,6 @@ import {
 } from "./claudeSettings.js";
 import { logger } from "./logger.js";
 import { DEFAULT_APP_ID, type LanguageSetting, type RinglyConfig } from "./types.js";
-
-const paths = envPaths("ringly", { suffix: "" });
-
-export function getConfigDir(): string {
-  return paths.config;
-}
-
-export function getConfigFile(): string {
-  return join(paths.config, "config.json");
-}
 
 export const DEFAULT_CONFIG: RinglyConfig = {
   schemaVersion: 1,
@@ -36,32 +22,16 @@ export const DEFAULT_CONFIG: RinglyConfig = {
 };
 
 /**
- * Carrega a config do Ringly. Desde a v0.2.1 a fonte primária é
- * `~/.claude/settings.json` (chave `pluginConfigs.ringly.options`),
- * mantendo o `config.json` antigo do env-paths apenas como fallback
- * para instalações pré-0.2.x. Se nenhum dos dois existir, retorna defaults.
+ * Carrega a config do Ringly a partir de `~/.claude/settings.json`
+ * (chave `pluginConfigs.ringly.options`). Se a chave não existir ou
+ * a leitura falhar, retorna `DEFAULT_CONFIG`.
  */
 export function loadConfig(): RinglyConfig {
-  if (hasRinglyPluginOptions()) {
-    try {
-      const opts = readRinglyPluginOptions();
-      return pluginOptionsToRinglyConfig(opts, DEFAULT_CONFIG);
-    } catch (err) {
-      logger.warn("Failed to read Claude settings; falling back to legacy config", {
-        message: (err as Error).message,
-      });
-    }
-  }
-
-  const file = getConfigFile();
-  if (!existsSync(file)) return { ...DEFAULT_CONFIG };
   try {
-    const raw = readFileSync(file, { encoding: "utf8" });
-    const parsed = JSON.parse(raw) as Partial<RinglyConfig>;
-    return mergeWithDefaults(parsed);
+    const opts = readRinglyPluginOptions();
+    return pluginOptionsToRinglyConfig(opts, DEFAULT_CONFIG);
   } catch (err) {
-    logger.warn("Failed to read config; using defaults", {
-      file,
+    logger.warn("Failed to read Claude settings; using defaults", {
       message: (err as Error).message,
     });
     return { ...DEFAULT_CONFIG };
@@ -69,10 +39,8 @@ export function loadConfig(): RinglyConfig {
 }
 
 /**
- * Persiste a config do Ringly. Desde a v0.2.1 a fonte primária é
- * `~/.claude/settings.json`. Mantemos também a escrita no `config.json`
- * antigo para compatibilidade com integrações externas que possam ainda
- * estar lendo dele (será removido em uma versão futura).
+ * Persiste a config do Ringly em `~/.claude/settings.json`
+ * (chave `pluginConfigs.ringly.options`) com escrita atômica e backup.
  */
 export function saveConfig(config: RinglyConfig): void {
   try {
@@ -82,26 +50,18 @@ export function saveConfig(config: RinglyConfig): void {
       message: (err as Error).message,
     });
   }
-
-  const file = getConfigFile();
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, { encoding: "utf8" });
 }
 
-function mergeWithDefaults(partial: Partial<RinglyConfig>): RinglyConfig {
-  return {
-    schemaVersion: 1,
-    language: normalizeLanguage(partial.language),
-    events: {
-      notification: partial.events?.notification ?? DEFAULT_CONFIG.events.notification,
-      stop: partial.events?.stop ?? DEFAULT_CONFIG.events.stop,
-      stopFailure: partial.events?.stopFailure ?? DEFAULT_CONFIG.events.stopFailure,
-      subagentStop: partial.events?.subagentStop ?? DEFAULT_CONFIG.events.subagentStop,
-    },
-    sound: partial.sound ?? DEFAULT_CONFIG.sound,
-    debug: partial.debug ?? DEFAULT_CONFIG.debug,
-    appId: partial.appId ?? DEFAULT_CONFIG.appId,
-  };
+const APP_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
+
+export function normalizeAppId(value: unknown): string {
+  if (typeof value !== "string" || !APP_ID_PATTERN.test(value)) {
+    if (value !== undefined) {
+      logger.warn("Invalid appId in config; using default", { value: String(value) });
+    }
+    return DEFAULT_CONFIG.appId;
+  }
+  return value;
 }
 
 function normalizeLanguage(value: unknown): LanguageSetting {
@@ -134,6 +94,9 @@ export function applyEnvOverrides(config: RinglyConfig): RinglyConfig {
 
   const debug = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_DEBUG"]);
   if (debug !== null) next.debug = debug;
+
+  next.appId = normalizeAppId(next.appId);
+  next.language = normalizeLanguage(next.language);
 
   return next;
 }

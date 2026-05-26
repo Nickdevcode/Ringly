@@ -5,6 +5,94 @@
 
 ---
 
+## [0.3.0] — 2026-05-25
+
+### 🇧🇷 Português
+
+**Mudança incompatível**
+
+- **Removido o sistema legacy completo.** O módulo `src/core/legacy.ts`, as flags `ringly init --migrate-legacy` e `ringly uninstall --legacy`, o check `legacy` do `doctor` e a seção de migração no README foram **deletados**. Esse sistema existia para detectar e desativar hooks PowerShell pré-Ringly (`~/.claude/hooks/notify-toast.ps1`) que poderiam disparar notificações em paralelo. Como o Ringly já está estabelecido há várias versões e o público-alvo agora é quem instala via marketplace direto, essa ponte de compatibilidade virou peso morto. **Migração:** se você ainda tem hooks PowerShell antigos rodando em `~/.claude/hooks/`, remova manualmente antes de instalar o Ringly 0.3.0 (ou rode `ringly uninstall --legacy` na 0.2.x antes de atualizar).
+- **Removido o fallback de `~/.config/ringly/config.json`** (env-paths). A config do Ringly agora vive **apenas** em `~/.claude/settings.json` na chave `pluginConfigs.ringly.options`. Instalações pré-0.2.x precisam rodar `ringly init` uma vez para migrar; instalações 0.2.x+ já usam `settings.json` como fonte primária e não precisam fazer nada. Bundle ficou ~14KB menor no `cli.js` e ~3KB menor no `hook.js` por causa disso.
+- **`ringly uninstall`** agora limpa a chave `pluginConfigs.ringly` do `settings.json` (com write atômico + backup) em vez de apagar o `config.json` antigo. A flag `--keep-config` continua disponível para preservar a configuração.
+
+**Segurança & robustez**
+
+- **Escrita atômica de `~/.claude/settings.json`** (`src/core/atomicWrite.ts`). Antes, `writeFileSync` escrevia direto no arquivo final, e uma race entre `ringly config` (TUI) e um hook disparado pelo Claude Code podia corromper o settings ou perder mudanças. Agora a escrita vai para um arquivo temporário (`settings.json.tmp.<pid>.<rand>`) e só renomeia para o arquivo final em uma operação atômica (atomic rename no NTFS desde Windows Vista; garantido pelo POSIX). Em caso de falha, o tmp é removido — nada de arquivo parcial.
+- **Validação leve de payload do hook** (`src/core/payloadGuards.ts`). O JSON vindo de stdin do Claude Code agora passa por `coerceClaudeHookPayload`, que: aceita só `hook_event_name` da whitelist, trunca strings (`message`, `agent_type`, `error_type`, `error`) em 500 caracteres, trunca paths (`cwd`, `transcript_path`) em 1024 caracteres, e descarta campos desconhecidos. Sem nova dependência; resolve risco de DoS por payload gigante e blindagem em profundidade contra entradas inesperadas.
+- **Limite de stdin reduzido de 10 MB para 256 KB** no CLI (`src/core/stdin.ts`) e no dispatcher do plugin (`plugin/hooks/dispatch.mjs`). Payloads do Claude Code são tipicamente <2 KB; 256 KB já é uma defesa generosa.
+- **Validação do `appId` carregado da config** (`src/core/config.ts`). Apenas `[A-Za-z0-9._-]{1,128}` é aceito. Valores inválidos no `settings.json` caem no default `Claude.Code.CLI` com aviso no log. Defesa em profundidade — o PowerShell escape já era seguro, mas validação explícita evita surpresas se um plugin terceiro escrever lixo no campo.
+- **Permissão 0600 do `settings.json`** em Linux/macOS após cada escrita. Como o arquivo pode conter tokens de outros plugins, restringir leitura a só o usuário dono é a postura correta. Windows continua respeitando ACLs herdadas do `~/.claude`.
+- **GC automático de backups antigos**. Antes, cada `ringly config` deixava um `settings.json.ringly-bak.<timestamp>` permanente. Agora, backups com mais de 7 dias são removidos automaticamente antes de criar um novo.
+- **Rotação de log a 5 MB** (`src/core/logger.ts`). Antes, o `ringly.log` crescia indefinidamente em debug mode. Agora, quando passa de 5 MB, é rotacionado para `ringly.log.1` (sobrescrevendo a rotação anterior). Check é throttled a uma vez por minuto para não impactar o caminho quente.
+
+**Comportamento**
+
+- **Detecção de idioma reordenada**: prioridade agora é `CLAUDE_PLUGIN_OPTION_LANGUAGE` → `Intl.DateTimeFormat` → `LANG`/`LC_*` → fallback `en-US`. Antes, `LANG` vinha antes do Intl, o que dava resultado errado para usuários BR rodando Claude Code a partir de WSL/Git Bash com `LANG=C.UTF-8`.
+- **Toast em macOS/Linux agora avisa explicitamente que não está implementado** em vez de falhar silenciosamente. O `isAvailable()` do canal toast retorna `true` para windows/macos/linux, e os stubs de macOS/Linux imprimem uma mensagem clara em stderr (uma única vez por processo) apontando para o tracker do GitHub. Antes, o `ringly test` em macOS virava no-op silencioso e o usuário não entendia o porquê.
+
+**Build & empacotamento**
+
+- **Tarball npm reduzido**. `package.json#files` agora inclui apenas `bin/`, `dist/`, `plugin/`, `scripts/`, `README.md`, `LICENSE`, `CHANGELOG.md`. `src/`, `tsup.config.ts`, `tsconfig.json` saíram — usuários finais não precisam do código-fonte nem da config de build (que só é usada via `npm install -g <github-shorthand>` e isso já está coberto por `scripts/prepare.js`).
+- **`sideEffects: false`** habilitado no `package.json` para que consumidores que importem `ringly/hook` ganhem tree-shaking real.
+- **Versões sincronizadas**: `package.json`, `plugin/.claude-plugin/plugin.json` agora ambos em `0.3.0`. Antes havia divergência (`package.json@0.2.4` vs `plugin.json@0.2.1`).
+
+**CI / Release**
+
+- **`npm run lint`** agora cobre também `plugin/hooks/` (o `dispatch.mjs`), que estava lintado em dev (via `biome.json#includes`) mas não no CI.
+- **Smoke run do bundle no CI**: cada build agora roda `node dist/cli.js --version`, `--help`, e (no Ubuntu) executa o `dist/hook.js` com payload de exemplo. Pega erros de import circular / runtime de top-level antes do publish.
+- **Verificação de versão no release**: o workflow `release.yml` agora valida que a tag git, `package.json#version` e `plugin.json#version` batem antes de publicar. Bloqueia inconsistências silenciosas.
+- **Timeout do dispatcher** padronizado para 12s (era 10s), dando folga sobre os 8s do PowerShell para evitar matar o child node antes do toast terminar.
+
+**Testes**
+
+- **+12 testes novos**: `test/payloadGuards.test.ts` (sanitização), `test/stdin.test.ts` (BOM, maxBytes, timeout, TTY), `test/notifier.test.ts` (isEventEnabled + buildIntent), `test/channels.test.ts` (dispatch isolation, isAvailable rejection), `test/runHook.test.ts` (end-to-end mockado do hook). O caminho crítico do plugin antes era exercitado só por unit tests fragmentados; agora tem cobertura direta.
+- **Testes adicionais para `claudeSettings`**: garantem que não fica `.tmp.*` órfão após write, e que o GC de backups respeita a janela de 7 dias.
+- **Testes para `detectSystemLanguage`** com mocks de `Intl.DateTimeFormat` validando a nova ordem de fallback.
+
+### 🇺🇸 English
+
+**Breaking change**
+
+- **Removed the entire legacy system.** The `src/core/legacy.ts` module, the `ringly init --migrate-legacy` and `ringly uninstall --legacy` flags, the `doctor` legacy check, and the migration section in the README were **deleted**. This system existed to detect and disable pre-Ringly PowerShell hooks (`~/.claude/hooks/notify-toast.ps1`) that could fire duplicate notifications alongside Ringly. Since Ringly has been stable across several versions and the target audience now installs directly via marketplace, this compatibility bridge became dead weight. **Migration:** if you still have legacy PowerShell hooks in `~/.claude/hooks/`, remove them manually before installing Ringly 0.3.0 (or run `ringly uninstall --legacy` on 0.2.x before upgrading).
+- **Removed the `~/.config/ringly/config.json` (env-paths) fallback.** Ringly config now lives **only** in `~/.claude/settings.json` under `pluginConfigs.ringly.options`. Pre-0.2.x installs need to run `ringly init` once to migrate; 0.2.x+ installs already use `settings.json` as the primary source and don't need to do anything. Bundle shrunk ~14KB on `cli.js` and ~3KB on `hook.js` as a result.
+- **`ringly uninstall`** now removes the `pluginConfigs.ringly` key from `settings.json` (with atomic write + backup) instead of deleting the old `config.json`. The `--keep-config` flag still exists to preserve your settings.
+
+**Security & robustness**
+
+- **Atomic write of `~/.claude/settings.json`** (`src/core/atomicWrite.ts`). Previously, `writeFileSync` wrote directly to the final file; a race between `ringly config` (TUI) and a hook fired by Claude Code could corrupt settings or lose changes. Writes now go to a temp file (`settings.json.tmp.<pid>.<rand>`) and only get renamed to the final file via an atomic rename (atomic on NTFS since Windows Vista; guaranteed by POSIX). On failure the tmp is removed — no partial files.
+- **Lightweight payload validation** (`src/core/payloadGuards.ts`). JSON from Claude Code's stdin now passes through `coerceClaudeHookPayload`: accepts only whitelisted `hook_event_name` values, truncates strings (`message`, `agent_type`, `error_type`, `error`) at 500 chars, truncates paths (`cwd`, `transcript_path`) at 1024 chars, and drops unknown fields. No new dependency; addresses DoS-via-large-payload risk and adds defense in depth.
+- **Stdin limit reduced from 10 MB to 256 KB** in both the CLI (`src/core/stdin.ts`) and the plugin dispatcher (`plugin/hooks/dispatch.mjs`). Real Claude Code payloads are typically <2 KB; 256 KB is already a generous defense.
+- **Validation of `appId`** loaded from config (`src/core/config.ts`). Only `[A-Za-z0-9._-]{1,128}` accepted; invalid values fall back to the default `Claude.Code.CLI` with a warning. Defense in depth — PowerShell escaping was already safe, but explicit validation prevents surprises if a third-party plugin writes garbage to the field.
+- **`settings.json` set to mode 0600** on Linux/macOS after each write. Since the file may contain tokens from other plugins, restricting reads to the owner is the correct posture. Windows still inherits `~/.claude` ACLs.
+- **Automatic GC of old backups**. Previously, each `ringly config` left a permanent `settings.json.ringly-bak.<timestamp>`. Backups older than 7 days are now removed automatically before creating a new one.
+- **Log rotation at 5 MB** (`src/core/logger.ts`). Previously, `ringly.log` grew unbounded in debug mode. Files over 5 MB are now rotated to `ringly.log.1` (overwriting the previous rotation). The size check is throttled to once per minute to keep the hot path cheap.
+
+**Behavior**
+
+- **Locale detection reordered**: precedence is now `CLAUDE_PLUGIN_OPTION_LANGUAGE` → `Intl.DateTimeFormat` → `LANG`/`LC_*` → fallback `en-US`. Previously `LANG` came before Intl, which gave wrong results for BR users running Claude Code from WSL/Git Bash with `LANG=C.UTF-8`.
+- **macOS/Linux toast now warns explicitly that it is not implemented** instead of failing silently. The toast channel's `isAvailable()` returns `true` for windows/macos/linux, and the macOS/Linux stubs print a clear stderr message (once per process) pointing to the GitHub tracker. Previously, `ringly test` on macOS was a silent no-op.
+
+**Build & packaging**
+
+- **Smaller npm tarball**. `package.json#files` now only includes `bin/`, `dist/`, `plugin/`, `scripts/`, `README.md`, `LICENSE`, `CHANGELOG.md`. `src/`, `tsup.config.ts`, `tsconfig.json` removed — end users don't need the source nor the build config (which is only used when installing via `npm install -g <github-shorthand>`, already covered by `scripts/prepare.js`).
+- **`sideEffects: false`** enabled in `package.json` so consumers importing `ringly/hook` get real tree-shaking.
+- **Versions synced**: `package.json` and `plugin/.claude-plugin/plugin.json` are both at `0.3.0` now. Previously there was a mismatch (`package.json@0.2.4` vs `plugin.json@0.2.1`).
+
+**CI / Release**
+
+- **`npm run lint`** now also covers `plugin/hooks/` (the `dispatch.mjs`), which was being linted in dev (via `biome.json#includes`) but not in CI.
+- **Bundle smoke run in CI**: each build now runs `node dist/cli.js --version`, `--help`, and (on Ubuntu) executes `dist/hook.js` with a sample payload. Catches top-level runtime / circular import errors before publish.
+- **Version-check on release**: the `release.yml` workflow now validates that the git tag, `package.json#version`, and `plugin.json#version` all match before publishing. Blocks silent inconsistencies.
+- **Dispatcher timeout** standardized to 12s (was 10s), giving margin over the 8s PowerShell timeout to avoid killing the child node before the toast finishes.
+
+**Tests**
+
+- **+12 new tests**: `test/payloadGuards.test.ts` (sanitization), `test/stdin.test.ts` (BOM, maxBytes, timeout, TTY), `test/notifier.test.ts` (isEventEnabled + buildIntent), `test/channels.test.ts` (dispatch isolation, isAvailable rejection), `test/runHook.test.ts` (mocked end-to-end hook). The plugin's critical path was previously exercised only through fragmented unit tests; now it has direct coverage.
+- **Additional `claudeSettings` tests**: ensure no `.tmp.*` orphan remains after a write, and that backup GC respects the 7-day window.
+- **`detectSystemLanguage` tests** with `Intl.DateTimeFormat` mocks validating the new fallback order.
+
+---
+
 ## [0.2.4] — 2026-05-26
 
 ### 🇧🇷 Português

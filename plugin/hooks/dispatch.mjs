@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { spawn, spawnSync as nodeSpawnSync } from "node:child_process";
+import { spawnSync as nodeSpawnSync, spawn } from "node:child_process";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
-import { existsSync, readFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 
 const requireFromHere = createRequire(import.meta.url);
@@ -44,10 +44,7 @@ const debugEnabled =
 function debugLog(msg) {
   if (!debugEnabled) return;
   try {
-    const file = join(
-      process.env["CLAUDE_PLUGIN_DATA"] || tmpdir(),
-      "ringly-dispatch.log",
-    );
+    const file = join(process.env["CLAUDE_PLUGIN_DATA"] || tmpdir(), "ringly-dispatch.log");
     appendFileSync(file, `[${new Date().toISOString()}] ${msg}\n`, { encoding: "utf8" });
   } catch {
     /* silent */
@@ -85,7 +82,7 @@ async function readStdin() {
     const timer = setTimeout(() => finish(Buffer.concat(chunks).toString("utf8")), 4000);
     process.stdin.on("data", (chunk) => {
       size += chunk.length;
-      if (size > 10 * 1024 * 1024) {
+      if (size > 256 * 1024) {
         finish("");
         return;
       }
@@ -139,7 +136,7 @@ function resolveGlobalNpmRoot() {
       windowsHide: true,
       timeout: 5000,
     });
-    if (result && result.stdout) {
+    if (result?.stdout) {
       const line = result.stdout.split(/\r?\n/).find((l) => l.trim().length > 0);
       return line ? line.trim() : null;
     }
@@ -184,7 +181,7 @@ async function spawnNode(args, rawStdin, label) {
       }
       debugLog(`${label} timed out`);
       resolve(false);
-    }, 10000);
+    }, 12000);
     child.on("error", (err) => {
       clearTimeout(timer);
       debugLog(`${label} error: ${err.message}`);
@@ -239,9 +236,7 @@ async function tryCliBinary(forcedEvent, rawStdin) {
     return false;
   }
   debugLog(`CLI binary: ${binaryPath}`);
-  const isCmdScript =
-    process.platform === "win32" &&
-    /\.(cmd|bat)$/i.test(binaryPath);
+  const isCmdScript = process.platform === "win32" && /\.(cmd|bat)$/i.test(binaryPath);
   return await new Promise((resolve) => {
     let child;
     try {
@@ -267,7 +262,7 @@ async function tryCliBinary(forcedEvent, rawStdin) {
       }
       debugLog("CLI timed out");
       resolve(false);
-    }, 10000);
+    }, 12000);
     child.on("error", (err) => {
       clearTimeout(timer);
       debugLog(`CLI spawn error: ${err.message}`);
@@ -394,9 +389,7 @@ function buildEmbeddedToast(event, payload) {
     case "StopFailure":
       title = dict.titleStopFailure;
       body =
-        payload?.error_type?.toString() ||
-        payload?.message?.toString() ||
-        dict.bodyStopFailure;
+        payload?.error_type?.toString() || payload?.message?.toString() || dict.bodyStopFailure;
       sound = "Notification.Looping.Alarm2";
       break;
     case "SubagentStop":
@@ -436,9 +429,7 @@ async function runEmbeddedToast(event, payload) {
   const { title, body, sound, silent } = buildEmbeddedToast(event, payload);
   const appId = "Claude.Code.CLI";
 
-  const audioTag = silent
-    ? '<audio silent="true"/>'
-    : `<audio src="ms-winsoundevent:${sound}"/>`;
+  const audioTag = silent ? '<audio silent="true"/>' : `<audio src="ms-winsoundevent:${sound}"/>`;
 
   const toastXml = `<toast><visual><binding template="ToastGeneric"><text>${title}</text><text>${body}</text></binding></visual>${audioTag}</toast>`;
 
@@ -467,14 +458,7 @@ exit 0
   await new Promise((resolve) => {
     const child = spawn(
       "powershell.exe",
-      [
-        "-NoProfile",
-        "-NonInteractive",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-EncodedCommand",
-        encoded,
-      ],
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
       { windowsHide: true, stdio: "ignore" },
     );
     const timer = setTimeout(() => {

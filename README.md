@@ -137,32 +137,12 @@ As chaves abaixo correspondem ao `userConfig` declarado no `plugin.json` e ficam
 
 ```bash
 ringly init                    # instalador interativo (TUI)
-ringly init --migrate-legacy   # antes do init, remove o sistema antigo
 ringly init --non-interactive  # aplica defaults, sem TUI
 ringly config                  # reconfigura interativamente
 ringly doctor                  # diagnóstico do ambiente local
 ringly test --event Stop --lang pt-BR
-ringly uninstall               # remove AUMID, atalho e configuração local
-ringly uninstall --legacy      # também remove hooks antigos de PowerShell
+ringly uninstall               # remove AUMID, atalho e configurações do Ringly
 ```
-
-### Migração do sistema PowerShell antigo
-
-Se você já tinha um sistema **próprio** de notificações em
-`~/.claude/hooks/notify-toast.ps1` (que foi o que originou o Ringly), o `doctor`
-vai detectar e te alertar. Para evitar **notificações duplicadas**, rode antes
-de instalar:
-
-```bash
-ringly init --migrate-legacy
-# ou, depois de já instalado:
-ringly uninstall --legacy
-```
-
-O Ringly **nunca apaga nada destrutivamente**: o `settings.json` original vai
-para `settings.json.ringly-bak.<timestamp>` e os scripts `.ps1` para
-`~/.claude/hooks/legacy-bak-<timestamp>/`. Se quiser reverter, basta restaurar
-manualmente.
 
 ### Como funciona
 
@@ -328,31 +308,12 @@ The keys below match the `userConfig` declared in `plugin.json` and live in `plu
 
 ```bash
 ringly init                    # interactive installer (TUI)
-ringly init --migrate-legacy   # remove the pre-Ringly system before init
 ringly init --non-interactive  # apply defaults, skip the TUI
 ringly config                  # reconfigure interactively
 ringly doctor                  # run a diagnostic of the local setup
 ringly test --event Stop --lang pt-BR
-ringly uninstall               # remove AUMID, shortcut, and local config
-ringly uninstall --legacy      # also remove the legacy PowerShell hooks
+ringly uninstall               # remove AUMID, shortcut, and Ringly settings
 ```
-
-### Migrating from a legacy PowerShell setup
-
-If you already had a home-grown notification setup at
-`~/.claude/hooks/notify-toast.ps1` (the prototype this project grew from),
-`doctor` will detect and warn you. To avoid **duplicate toasts**, run before
-installing:
-
-```bash
-ringly init --migrate-legacy
-# or, if Ringly is already installed:
-ringly uninstall --legacy
-```
-
-Ringly **never destroys anything**: the original `settings.json` is moved to
-`settings.json.ringly-bak.<timestamp>` and the `.ps1` scripts go to
-`~/.claude/hooks/legacy-bak-<timestamp>/`. To revert, restore them manually.
 
 ### How it works
 

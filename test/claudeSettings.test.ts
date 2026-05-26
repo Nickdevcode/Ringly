@@ -133,4 +133,42 @@ describe("claudeSettings", () => {
     const config = pluginOptionsToRinglyConfig({ language: "fr-FR" }, DEFAULT_CONFIG);
     expect(config.language).toBe(DEFAULT_CONFIG.language);
   });
+
+  it("does not leave .tmp.* leftover files after a successful write", () => {
+    writeRinglyPluginOptions({ language: "pt-BR" });
+
+    const dir = join(FAKE_HOME, ".claude");
+    const entries = readFileSync ? require("node:fs").readdirSync(dir) : [];
+    const leftovers = entries.filter((e: string) => e.includes(".tmp."));
+    expect(leftovers).toEqual([]);
+  });
+
+  it("prunes backup files older than 7 days", () => {
+    const file = getClaudeSettingsFile();
+    mkdirSync(join(FAKE_HOME, ".claude"), { recursive: true });
+    writeFileSync(file, JSON.stringify({ existing: true }));
+
+    const oldBackup = `${file}.ringly-bak.2020-01-01T00-00-00-000Z`;
+    writeFileSync(oldBackup, "{}");
+    const fs = require("node:fs");
+    const eightDaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000;
+    fs.utimesSync(oldBackup, new Date(eightDaysAgo), new Date(eightDaysAgo));
+
+    writeRinglyPluginOptions({ debug: true });
+
+    expect(existsSync(oldBackup)).toBe(false);
+  });
+
+  it("keeps backup files newer than 7 days", () => {
+    const file = getClaudeSettingsFile();
+    mkdirSync(join(FAKE_HOME, ".claude"), { recursive: true });
+    writeFileSync(file, JSON.stringify({ existing: true }));
+
+    const recentBackup = `${file}.ringly-bak.2026-05-20T00-00-00-000Z`;
+    writeFileSync(recentBackup, "{}");
+
+    writeRinglyPluginOptions({ debug: true });
+
+    expect(existsSync(recentBackup)).toBe(true);
+  });
 });
