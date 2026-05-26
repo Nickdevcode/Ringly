@@ -5,9 +5,11 @@ import {
   getClaudeSettingsFile,
   pluginOptionsToRinglyConfig,
   readRinglyPluginOptions,
+} from "../core/claudeSettings.js";
+import {
   ringlyConfigToPluginOptions,
   writeRinglyPluginOptions,
-} from "../core/claudeSettings.js";
+} from "../core/claudeSettingsWrite.js";
 import { DEFAULT_CONFIG, loadConfig } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { createTranslator } from "../core/translator.js";

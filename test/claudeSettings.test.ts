@@ -18,9 +18,11 @@ import {
   getClaudeSettingsFile,
   pluginOptionsToRinglyConfig,
   readRinglyPluginOptions,
+} from "../src/core/claudeSettings.js";
+import {
   ringlyConfigToPluginOptions,
   writeRinglyPluginOptions,
-} from "../src/core/claudeSettings.js";
+} from "../src/core/claudeSettingsWrite.js";
 
 describe("claudeSettings", () => {
   beforeEach(() => {

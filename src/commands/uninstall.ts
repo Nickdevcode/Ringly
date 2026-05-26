@@ -1,6 +1,6 @@
 import { existsSync, unlinkSync } from "node:fs";
 import chalk from "chalk";
-import { removeRinglyPluginOptions } from "../core/claudeSettings.js";
+import { removeRinglyPluginOptions } from "../core/claudeSettingsWrite.js";
 import { loadConfig } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { createTranslator } from "../core/translator.js";

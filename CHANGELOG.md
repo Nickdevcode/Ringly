@@ -5,6 +5,32 @@
 
 ---
 
+## [0.5.2] — 2026-05-26
+
+### 🇧🇷 Português
+
+**Mudado**
+
+- **Bundle do hook ficou mais enxuto e separado da escrita de settings** (`src/core/claudeSettings.ts`, `src/core/claudeSettingsWrite.ts`, `src/core/config.ts`, `src/core/configWrite.ts`). Antes, o hook (caminho quente, executado em cada `Notification` / `Stop` / `SubagentStop`) arrastava o módulo inteiro de manipulação de `~/.claude/settings.json` — inclusive `chmodSync`, `copyFileSync` e `readdirSync` de `node:fs`, que são usados só pra escrever / fazer backup / podar backups antigos. Como o hook **só lê** config, esses imports nunca eram chamados, mas viajavam no bundle e geravam três warnings de tree-shake do Rollup a cada `npm run build`. Agora `claudeSettings.ts` ficou estritamente read-only (só `existsSync` + `readFileSync` + `homedir` + `join`) e `claudeSettingsWrite.ts` carrega tudo que escreve. O mesmo princípio foi aplicado a `config.ts` (`loadConfig` + `applyEnvOverrides`) vs. `configWrite.ts` (`saveConfig`). Resultado: `dist/hook.js` / `dist/hook.cjs` não puxam mais `chmodSync` / `copyFileSync` / `readdirSync`, e os warnings somem do build.
+- **Comportamento externo: nenhum.** Quem usa o CLI (`ringly config`, `ringly init`, `ringly uninstall`) ou o plugin no Claude Code não percebe diferença — toda mudança é interna ao layout dos módulos `src/core/`. Os 133 testes existentes seguem passando sem alteração de comportamento.
+
+**Notas pra quem tá vindo da v0.5.1**
+
+- Nada quebra. A v0.5.1 (fix do `spawn EINVAL` no Windows) continua entregando exatamente o mesmo comportamento aqui. Esta release é puramente uma refatoração de bundle: hook mais limpo, separação read/write clara, sem custo nenhum pro usuário final.
+
+### 🇺🇸 English
+
+**Changed**
+
+- **Hook bundle is leaner and the settings-write surface is decoupled** (`src/core/claudeSettings.ts`, `src/core/claudeSettingsWrite.ts`, `src/core/config.ts`, `src/core/configWrite.ts`). Previously the hook (the hot path, executed on every `Notification` / `Stop` / `SubagentStop`) dragged in the entire `~/.claude/settings.json` manipulation module — including `chmodSync`, `copyFileSync`, and `readdirSync` from `node:fs`, which only the writer needs (write, backup, prune old backups). Since the hook **only reads** config, those imports were never called but still shipped in the bundle and triggered three Rollup tree-shake warnings on every `npm run build`. Now `claudeSettings.ts` is strictly read-only (only `existsSync` + `readFileSync` + `homedir` + `join`) and `claudeSettingsWrite.ts` carries everything that writes. The same principle was applied to `config.ts` (`loadConfig` + `applyEnvOverrides`) vs. `configWrite.ts` (`saveConfig`). Outcome: `dist/hook.js` / `dist/hook.cjs` no longer pull in `chmodSync` / `copyFileSync` / `readdirSync`, and the build warnings are gone.
+- **External behavior: none.** CLI users (`ringly config`, `ringly init`, `ringly uninstall`) and Claude Code plugin users see no difference — every change is internal to the `src/core/` module layout. All 133 existing tests pass with no behavior change.
+
+**Notes for v0.5.1 users**
+
+- Nothing breaks. v0.5.1 (the Windows `spawn EINVAL` fix) keeps delivering the same behavior here. This release is purely a bundle refactor: cleaner hook, clear read/write separation, zero cost to the end user.
+
+---
+
 ## [0.5.1] — 2026-05-26
 
 ### 🇧🇷 Português

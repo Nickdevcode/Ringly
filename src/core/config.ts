@@ -1,9 +1,14 @@
-import {
-  pluginOptionsToRinglyConfig,
-  readRinglyPluginOptions,
-  ringlyConfigToPluginOptions,
-  writeRinglyPluginOptions,
-} from "./claudeSettings.js";
+/**
+ * Read-only config surface for the hook hot path.
+ *
+ * `loadConfig` + `applyEnvOverrides` are what the Claude Code hook calls on
+ * every event, so this module must NOT import anything that pulls in the
+ * settings writer (`claudeSettingsWrite.ts`), or the writer's `chmodSync`/
+ * `copyFileSync`/`readdirSync` imports will leak back into `dist/hook.{js,cjs}`
+ * and bloat the bundle. `saveConfig` lives in `configWrite.ts` for that
+ * reason — only `cli.ts` commands import it.
+ */
+import { pluginOptionsToRinglyConfig, readRinglyPluginOptions } from "./claudeSettings.js";
 import { logger } from "./logger.js";
 import { DEFAULT_APP_ID, type LanguageSetting, type RinglyConfig } from "./types.js";
 
@@ -36,20 +41,6 @@ export function loadConfig(): RinglyConfig {
       message: (err as Error).message,
     });
     return { ...DEFAULT_CONFIG };
-  }
-}
-
-/**
- * Persists the Ringly config to `~/.claude/settings.json`
- * (`pluginConfigs.ringly.options` key) with atomic write + backup.
- */
-export function saveConfig(config: RinglyConfig): void {
-  try {
-    writeRinglyPluginOptions(ringlyConfigToPluginOptions(config));
-  } catch (err) {
-    logger.warn("Failed to save to ~/.claude/settings.json", {
-      message: (err as Error).message,
-    });
   }
 }
 

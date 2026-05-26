@@ -1,26 +1,27 @@
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  unlinkSync,
-} from "node:fs";
+/**
+ * Read-only access to `~/.claude/settings.json` plus shared types/constants.
+ *
+ * This module is intentionally narrow: the Claude Code hook loads on every
+ * Notification/Stop/SubagentStop event, so anything imported transitively
+ * here ships in `dist/hook.{js,cjs}`. The hook never writes settings —
+ * only reads them — so the write/backup/rotation surface lives in the
+ * sibling `claudeSettingsWrite.ts` (with its `chmodSync`/`copyFileSync`/
+ * `readdirSync` imports), kept out of the hot path by way of being only
+ * reachable from interactive `cli.ts` commands.
+ */
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
-import { atomicWriteFileSync } from "./atomicWrite.js";
+import { join } from "node:path";
 import { logger } from "./logger.js";
 import type { RinglyConfig } from "./types.js";
 
-const PLUGIN_ID = "ringly";
+export const PLUGIN_ID = "ringly";
 
-interface PluginConfigEntry {
+export interface PluginConfigEntry {
   options?: Record<string, unknown>;
 }
 
-interface ClaudeSettings extends Record<string, unknown> {
+export interface ClaudeSettings extends Record<string, unknown> {
   pluginConfigs?: Record<string, PluginConfigEntry>;
 }
 
@@ -61,101 +62,6 @@ export function readRinglyPluginOptions(): RinglyPluginOptions {
   return (entry?.options ?? {}) as RinglyPluginOptions;
 }
 
-export interface SaveResult {
-  file: string;
-  backupFile: string | null;
-  wasCreated: boolean;
-}
-
-const BACKUP_SUFFIX = ".ringly-bak.";
-const BACKUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-
-function pruneOldBackups(file: string): void {
-  const dir = dirname(file);
-  const prefix = `${basename(file)}${BACKUP_SUFFIX}`;
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return;
-  }
-  const now = Date.now();
-  for (const entry of entries) {
-    if (!entry.startsWith(prefix)) continue;
-    const fullPath = join(dir, entry);
-    try {
-      const stat = statSync(fullPath);
-      if (now - stat.mtimeMs > BACKUP_MAX_AGE_MS) {
-        unlinkSync(fullPath);
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
-export function writeRinglyPluginOptions(options: RinglyPluginOptions): SaveResult {
-  const file = getClaudeSettingsFile();
-  const dir = dirname(file);
-  mkdirSync(dir, { recursive: true });
-
-  pruneOldBackups(file);
-
-  const wasCreated = !existsSync(file);
-  let backupFile: string | null = null;
-
-  if (!wasCreated) {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    backupFile = `${file}${BACKUP_SUFFIX}${timestamp}`;
-    try {
-      copyFileSync(file, backupFile);
-    } catch (err) {
-      logger.warn("Failed to backup settings.json before writing", {
-        message: (err as Error).message,
-      });
-      backupFile = null;
-    }
-  }
-
-  const settings = readClaudeSettings();
-  const nextSettings: ClaudeSettings = { ...settings };
-  const pluginConfigs: Record<string, PluginConfigEntry> = { ...(settings.pluginConfigs ?? {}) };
-  const existingEntry: PluginConfigEntry = pluginConfigs[PLUGIN_ID] ?? {};
-
-  pluginConfigs[PLUGIN_ID] = {
-    ...existingEntry,
-    options: { ...(existingEntry.options ?? {}), ...options },
-  };
-  nextSettings.pluginConfigs = pluginConfigs;
-
-  atomicWriteFileSync(file, `${JSON.stringify(nextSettings, null, 2)}\n`);
-
-  if (process.platform !== "win32") {
-    try {
-      chmodSync(file, 0o600);
-    } catch (err) {
-      logger.warn("Failed to chmod 600 settings.json", {
-        message: (err as Error).message,
-      });
-    }
-  }
-
-  return { file, backupFile, wasCreated };
-}
-
-export function ringlyConfigToPluginOptions(config: RinglyConfig): RinglyPluginOptions {
-  return {
-    language: config.language,
-    events_notification: config.events.notification,
-    events_stop: config.events.stop,
-    events_stopFailure: config.events.stopFailure,
-    events_subagentStop: config.events.subagentStop,
-    sound: config.sound,
-    debug: config.debug,
-    check_updates: config.checkUpdates,
-  };
-}
-
 export function pluginOptionsToRinglyConfig(
   options: RinglyPluginOptions,
   defaults: RinglyConfig,
@@ -177,34 +83,4 @@ export function pluginOptionsToRinglyConfig(
     debug: options.debug ?? defaults.debug,
     checkUpdates: options.check_updates ?? defaults.checkUpdates,
   };
-}
-
-export function removeRinglyPluginOptions(): boolean {
-  const file = getClaudeSettingsFile();
-  if (!existsSync(file)) return false;
-
-  const settings = readClaudeSettings();
-  if (!settings.pluginConfigs?.[PLUGIN_ID]) return false;
-
-  const nextPluginConfigs = { ...settings.pluginConfigs };
-  delete nextPluginConfigs[PLUGIN_ID];
-
-  const nextSettings: ClaudeSettings = { ...settings };
-  if (Object.keys(nextPluginConfigs).length === 0) {
-    delete nextSettings.pluginConfigs;
-  } else {
-    nextSettings.pluginConfigs = nextPluginConfigs;
-  }
-
-  atomicWriteFileSync(file, `${JSON.stringify(nextSettings, null, 2)}\n`);
-
-  if (process.platform !== "win32") {
-    try {
-      chmodSync(file, 0o600);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  return true;
 }
