@@ -3,6 +3,26 @@ export interface ToastScriptParams {
   toastXml: string;
 }
 
+/**
+ * Builds the PowerShell script that loads the toast XML and invokes the
+ * WinRT ToastNotificationManager. The script is passed to powershell.exe
+ * via `-EncodedCommand` (UTF-16 LE + base64) by `runPowerShell`, so the
+ * surrounding shell never parses it — there is no shell-injection surface
+ * here, only PowerShell-string-literal injection inside the template.
+ *
+ * Defense in depth — two independent escape layers run before the values
+ * land in the script:
+ *   1. The caller (toast.ts) runs every user-controlled field through
+ *      `escapeXmlText`, which turns single quotes into `&apos;` and any
+ *      character outside printable ASCII into `&#N;` entities. After
+ *      this step `toastXml` cannot contain a raw `'`.
+ *   2. We still do `replace(/'/g, "''")` below. It's redundant for the
+ *      XML (already neutralised in step 1) but mandatory for `appId`,
+ *      which comes from config and never goes through `escapeXmlText`.
+ *      In PowerShell single-quoted strings, `''` is the literal `'` and
+ *      no other character (including backtick, `$`, `;`) is interpolated,
+ *      so this fully neutralises the value as a literal.
+ */
 export function buildToastScript(params: ToastScriptParams): string {
   const { appId, toastXml } = params;
   const safeXml = toastXml.replace(/'/g, "''");
@@ -61,8 +81,37 @@ export interface AumidRegisterParams {
   shortcutPath: string;
 }
 
+/**
+ * Builds the PowerShell script that registers Claude Code's AUMID
+ * (Application User Model ID) by creating a Start Menu shortcut and
+ * tagging it with the AUMID via the IPropertyStore COM interface.
+ *
+ * Why this whole song-and-dance: Windows 10/11's
+ * `ToastNotificationManager` refuses to display toasts unless the
+ * calling process is associated with a registered AUMID. The cleanest
+ * user-land way to register an AUMID without an installer or admin
+ * rights is to drop a shortcut into the per-user Start Menu and stamp
+ * it with the AUMID property. Once the shortcut exists, any process
+ * launched from it (or invoking the AUMID directly) can show toasts.
+ *
+ * Why C# inline via `Add-Type` instead of pure PowerShell: PowerShell
+ * has no clean way to call `SHGetPropertyStoreFromParsingName` and
+ * marshal a `PROPVARIANT` of type `VT_LPWSTR`. Embedding a tiny C#
+ * bridge keeps the marshaling correct and avoids depending on third-party
+ * modules (which we cannot assume the user has installed).
+ *
+ * Magic numbers in the embedded C# (do not change without checking docs):
+ *   - GUID `886d8eeb-8cf2-4446-8d02-cdba1dbdcf99`: IPropertyStore IID.
+ *   - GUID `9f4c2855-9f79-4b39-a8d0-e1d42de1d5f3` + pid `5`:
+ *     `PKEY_AppUserModel_ID` — the property that holds the AUMID.
+ *     See https://learn.microsoft.com/windows/win32/properties/props-system-appusermodel-id
+ *   - `vt = 31`: `VT_LPWSTR` — null-terminated UTF-16 string variant.
+ *   - `flags = 2`: `GPS_READWRITE` for SHGetPropertyStoreFromParsingName.
+ */
 export function buildAumidRegisterScript(params: AumidRegisterParams): string {
   const { appId, appName, targetPath, iconPath, shortcutPath } = params;
+  // PowerShell single-quote escape (same defense as buildToastScript above):
+  // doubles every `'` so the value cannot terminate its string literal.
   const esc = (s: string) => s.replace(/'/g, "''");
 
   return `

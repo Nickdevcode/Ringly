@@ -22,9 +22,9 @@ export const DEFAULT_CONFIG: RinglyConfig = {
 };
 
 /**
- * Carrega a config do Ringly a partir de `~/.claude/settings.json`
- * (chave `pluginConfigs.ringly.options`). Se a chave não existir ou
- * a leitura falhar, retorna `DEFAULT_CONFIG`.
+ * Loads the Ringly config from `~/.claude/settings.json`
+ * (`pluginConfigs.ringly.options` key). If the key is missing or
+ * the read fails, returns `DEFAULT_CONFIG`.
  */
 export function loadConfig(): RinglyConfig {
   try {
@@ -39,8 +39,8 @@ export function loadConfig(): RinglyConfig {
 }
 
 /**
- * Persiste a config do Ringly em `~/.claude/settings.json`
- * (chave `pluginConfigs.ringly.options`) com escrita atômica e backup.
+ * Persists the Ringly config to `~/.claude/settings.json`
+ * (`pluginConfigs.ringly.options` key) with atomic write + backup.
  */
 export function saveConfig(config: RinglyConfig): void {
   try {

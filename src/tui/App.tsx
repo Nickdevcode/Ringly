@@ -40,14 +40,14 @@ export const App: FC<AppProps> = ({
   const [stage, setStage] = useState<Stage>(mode === "config" ? "language" : "welcome");
 
   /**
-   * Durante o `init` a TUI começa sempre em inglês para apresentar uma
-   * interface previsível para qualquer usuário. Assim que ele escolhe o
-   * idioma no `LanguagePicker`, todas as telas seguintes (eventos, som,
-   * AUMID, done) já refletem a escolha em tempo real.
+   * During `init` the TUI always starts in English to present a
+   * predictable interface to any user. As soon as they pick a
+   * language in `LanguagePicker`, every following screen (events,
+   * sound, AUMID, done) reflects that choice in real time.
    *
-   * Durante o `config`, faz sentido abrir já no idioma corrente do
-   * usuário, porque ele está só reconfigurando — não está sendo
-   * apresentado ao Ringly pela primeira vez.
+   * During `config` it makes sense to open in the user's current
+   * language, because they are only reconfiguring — not being
+   * introduced to Ringly for the first time.
    */
   const [language, setLanguage] = useState<LanguageSetting>(
     mode === "init" ? "en-US" : initialConfig.language,

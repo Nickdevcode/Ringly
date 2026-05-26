@@ -22,7 +22,7 @@ O projeto é distribuído em **duas camadas complementares e obrigatórias**,
 nesta ordem:
 
 1. **Pacote npm `ringly`** (passo 1) — registra o **AUMID do Windows** (sem ele,
-   o Windows 11 silencia o toast nativo), instala o atalho no Menu Iniciar,
+   o Windows 10/11 silencia o toast nativo), instala o atalho no Menu Iniciar,
    escreve a configuração inicial e fornece os utilitários `ringly doctor` /
    `ringly config` / `ringly uninstall`.
 2. **Plugin do Claude Code** (passo 2) — registra os hooks (`Notification`,
@@ -31,27 +31,27 @@ nesta ordem:
    já registrado no passo 1.
 
 > ⚠️ **Os dois passos são obrigatórios.** O plugin sozinho até roda o dispatcher,
-> mas no Windows 11 o `ToastNotificationManager` exige um AUMID registrado para
+> mas no Windows 10/11 o `ToastNotificationManager` exige um AUMID registrado para
 > exibir notificações na Central de Ações — esse registro é feito apenas pelo
 > `ringly init`. Sem ele, você ouve no máximo um beep de fallback (ou nada).
 
 ### Status
 
-O Ringly está em desenvolvimento ativo. **Windows 11** é o alvo suportado para a v1.0.
+O Ringly está em desenvolvimento ativo. **Windows 10 e 11** são os sistemas suportados na v1.0.
 macOS e Linux têm os back-ends estruturados e estão planejados para a próxima versão.
 
-| Recurso                   | Windows 11 | macOS | Linux |
-| ------------------------- | :--------: | :---: | :---: |
-| Toast nativo              |     ✓      |  ⏳   |  ⏳   |
-| Som de fallback           |     ✓      |  ⏳   |  ⏳   |
-| Registro AUMID            |     ✓      |   —   |   —   |
-| Notificações em pt-BR/en-US |    ✓      |   ✓   |   ✓   |
-| TUI e CLI em pt-BR/en-US  |     ✓      |   ✓   |   ✓   |
+| Recurso                     | Windows 10/11 | macOS | Linux |
+| --------------------------- | :-----------: | :---: | :---: |
+| Toast nativo                |       ✓       |  ⏳   |  ⏳   |
+| Som de fallback             |       ✓       |  ⏳   |  ⏳   |
+| Registro AUMID              |       ✓       |   —   |   —   |
+| Notificações em pt-BR/en-US |       ✓       |   ✓   |   ✓   |
+| TUI e CLI em pt-BR/en-US    |       ✓       |   ✓   |   ✓   |
 
 ### Instalação
 
 A instalação é feita em **dois passos**. Pule um e o toast nativo não vai
-aparecer no Windows 11 — não é uma escolha, é uma exigência do próprio sistema
+aparecer no Windows 10/11 — não é uma escolha, é uma exigência do próprio sistema
 operacional (veja a nota acima sobre o AUMID).
 
 #### Passo 1 — Instalar a CLI `ringly` (registra o AUMID)
@@ -193,7 +193,7 @@ messages so you always know what Claude needs from you without staring at your t
 It is distributed as **two complementary layers, both required**, in this order:
 
 1. **`ringly` npm package** (step 1) — registers the **Windows AUMID** (without
-   it Windows 11 silently drops the native toast), installs the Start Menu
+   it Windows 10/11 silently drops the native toast), installs the Start Menu
    shortcut, writes the initial configuration, and ships the `ringly doctor` /
    `ringly config` / `ringly uninstall` utilities.
 2. **Claude Code plugin** (step 2) — registers the hooks (`Notification`,
@@ -202,27 +202,27 @@ It is distributed as **two complementary layers, both required**, in this order:
    the AUMID already registered in step 1.
 
 > ⚠️ **Both steps are required.** The plugin alone runs the dispatcher, but on
-> Windows 11 `ToastNotificationManager` only displays notifications from apps
+> Windows 10/11 `ToastNotificationManager` only displays notifications from apps
 > with a registered AUMID — and that registration is performed exclusively by
 > `ringly init`. Skip it and you'll get a fallback beep at best, nothing at worst.
 
 ### Status
 
-Ringly is in active development. **Windows 11** is the supported target for v1.0.
+Ringly is in active development. **Windows 10 and 11** are the supported targets for v1.0.
 macOS and Linux toast back-ends are scaffolded and planned for the next release.
 
-| Surface                       | Windows 11 | macOS | Linux |
-| ----------------------------- | :--------: | :---: | :---: |
-| Native toast                  |     ✓      |  ⏳   |  ⏳   |
-| Sound fallback                |     ✓      |  ⏳   |  ⏳   |
-| AUMID register                |     ✓      |   —   |   —   |
-| Notifications in pt-BR/en-US  |     ✓      |   ✓   |   ✓   |
-| TUI & CLI in pt-BR/en-US      |     ✓      |   ✓   |   ✓   |
+| Surface                       | Windows 10/11 | macOS | Linux |
+| ----------------------------- | :-----------: | :---: | :---: |
+| Native toast                  |       ✓       |  ⏳   |  ⏳   |
+| Sound fallback                |       ✓       |  ⏳   |  ⏳   |
+| AUMID register                |       ✓       |   —   |   —   |
+| Notifications in pt-BR/en-US  |       ✓       |   ✓   |   ✓   |
+| TUI & CLI in pt-BR/en-US      |       ✓       |   ✓   |   ✓   |
 
 ### Installation
 
 Installation is a **two-step** process. Skip either one and native toasts won't
-show up on Windows 11 — this isn't a choice, it's an OS-level requirement (see
+show up on Windows 10/11 — this isn't a choice, it's an OS-level requirement (see
 the note above about the AUMID).
 
 #### Step 1 — Install the `ringly` CLI (registers the AUMID)

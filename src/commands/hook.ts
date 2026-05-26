@@ -16,6 +16,14 @@ export interface RunHookOptions {
   forcedEvent?: ClaudeHookEventName | undefined;
 }
 
+/**
+ * Hot path for Claude Code hooks. Every failure is swallowed and logged
+ * via `logger.error`; the process always exits 0 (see `src/hook.ts`).
+ * This is intentional — a non-zero exit here would surface as a hook
+ * failure inside Claude Code and disrupt the user's session, which is
+ * a worse outcome than a missing notification. Diagnose issues via
+ * `ringly.log` instead of exit codes.
+ */
 export async function runHook(options: RunHookOptions = {}): Promise<void> {
   try {
     const raw = await readStdin({ timeoutMs: 4000 });

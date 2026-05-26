@@ -10,7 +10,7 @@ This is the **plugin layer** of Ringly. It registers four hooks
 2. Falls back to spawning the `ringly` CLI binary if installed globally,
 3. Falls back to an **embedded toast** as a last resort.
 
-> ⚠️ **This plugin is not standalone.** On Windows 11, the
+> ⚠️ **This plugin is not standalone.** On Windows 10/11, the
 > `ToastNotificationManager` only displays toasts from apps with a registered
 > AUMID, and that registration is performed exclusively by `ringly init` (from
 > the companion npm package). Installing only the plugin will at best play a

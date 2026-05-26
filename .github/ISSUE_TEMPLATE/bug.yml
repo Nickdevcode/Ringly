@@ -20,7 +20,7 @@ body:
     id: os
     attributes:
       label: Operating system
-      placeholder: "Windows 11 23H2"
+      placeholder: "Windows 11 23H2 / Windows 10 22H2"
     validations:
       required: true
 

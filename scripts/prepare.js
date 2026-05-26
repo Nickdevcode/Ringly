@@ -1,23 +1,24 @@
 #!/usr/bin/env node
 /**
- * Script `prepare` do npm. Roda automaticamente em tres cenarios:
+ * npm `prepare` script. Runs automatically in three scenarios:
  *
- *   1. `npm install` na pasta do projeto (clone classico)
- *   2. `npm install -g <github-shorthand>` (ex.: `npm install -g nickdevcode/Ringly`,
- *      uma instalacao direto do GitHub via shorthand do npm, NAO confundir
- *      com o `/plugin marketplace add` do Claude Code que tem sintaxe propria)
- *   3. Antes de `npm publish`
+ *   1. `npm install` inside the project folder (classic clone)
+ *   2. `npm install -g <github-shorthand>` (e.g. `npm install -g nickdevcode/Ringly`,
+ *      a direct GitHub install via npm's shorthand — NOT to be confused
+ *      with Claude Code's `/plugin marketplace add`, which has its own syntax)
+ *   3. Before `npm publish`
  *
- * Comportamento: faz build (tsup) apenas se `dist/` ainda nao existir.
- * Isso evita rebuilds desnecessarios em dev (onde voce ja tem `dist/`)
- * e garante que instalacoes vindas do GitHub gerem o bundle (ja que o
- * `dist/` esta no `.gitignore`).
+ * Behavior: builds (tsup) only when `dist/` is missing. This skips
+ * redundant rebuilds in dev (where `dist/` already exists) and still
+ * guarantees that GitHub installs produce a bundle, since `dist/`
+ * is in `.gitignore`.
  *
- * Para evitar dependencia do `npm.cmd` ou shell, chamamos o tsup
- * diretamente via Node + caminho resolvido pelo Node module loader.
+ * We invoke tsup directly via Node + a Node-resolved path instead of
+ * shelling out, so the script does not depend on `npm.cmd` or the
+ * surrounding shell being available.
  *
- * Falha silenciosa: se o build der erro, registra mas nao quebra o
- * `npm install` inteiro.
+ * Fails silently: a build error is logged but never aborts the
+ * surrounding `npm install`.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";

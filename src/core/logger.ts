@@ -7,7 +7,16 @@ type LogLevel = "debug" | "info" | "warn" | "error";
 
 const paths = envPaths("ringly", { suffix: "" });
 
+// Rotate at 5 MB: large enough to keep a few days of normal debug output
+// for forensic value, small enough that pathological loops (a Claude Code
+// session emitting hundreds of hooks/min in debug mode) cannot fill a
+// user's disk before we react.
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
+
+// Throttle the size check to once per minute. `appendFileSync` runs on
+// the hot path of every hook; we cannot afford a `statSync` on every
+// call. A 1-minute window means in the worst case the log overshoots
+// `MAX_LOG_BYTES` by whatever fits in 60 s of writes, which is fine.
 const ROTATION_CHECK_INTERVAL_MS = 60 * 1000;
 
 function resolveLogDir(): string {

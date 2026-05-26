@@ -22,7 +22,7 @@ a melhor primeira contribuição possível.
 
 - **Node.js 20+** (recomendado: 22 LTS)
 - **npm 10+**
-- **Windows 11** se quiser testar o toast nativo (macOS/Linux ainda estão como stubs)
+- **Windows 10 ou 11** se quiser testar o toast nativo (macOS/Linux ainda estão como stubs)
 - **PowerShell 5.1+** (já vem com o Windows)
 - **Git**
 
@@ -220,7 +220,7 @@ first contribution.
 
 - **Node.js 20+** (recommended: 22 LTS)
 - **npm 10+**
-- **Windows 11** to test the native toast (macOS/Linux are still stubs)
+- **Windows 10 or 11** to test the native toast (macOS/Linux are still stubs)
 - **PowerShell 5.1+** (ships with Windows)
 - **Git**
 

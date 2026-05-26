@@ -1,3 +1,14 @@
+/**
+ * Lightweight, dependency-free coercion of the hook payload that arrives
+ * via stdin. We avoid pulling in zod/ajv (~50 KB to the hot path bundle)
+ * because the payload shape is small and the validation rules are simple.
+ *
+ * Limits below are intentionally tight: real Claude Code payloads are
+ * <2 KB and contain short fields. Anything beyond these limits is either
+ * a misuse or a probe — we truncate instead of failing so the hook
+ * stays best-effort, and we discard unknown fields entirely to avoid
+ * accidentally surfacing them in toast text or logs.
+ */
 import type { ClaudeHookEventName, ClaudeHookPayload } from "./types.js";
 
 const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
@@ -7,6 +18,8 @@ const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
   "SubagentStop",
 ]);
 
+// 500 chars is enough for any human-readable error/message we render in a
+// toast body; 1024 covers realistic file paths even on deep WSL/macOS trees.
 const MAX_STRING_LENGTH = 500;
 const MAX_PATH_LENGTH = 1024;
 
