@@ -31,36 +31,72 @@ a melhor primeira contribuição possível.
 ```bash
 git clone https://github.com/nickdevcode/Ringly.git
 cd Ringly
-npm install
-npm run build
+npm install         # roda scripts/prepare.js, que faz build se dist/ não existir
+npm run build       # build explícito (idempotente)
 node dist/cli.js doctor
 ```
+
+> O `scripts/prepare.js` roda automaticamente no `npm install` e compila o
+> `dist/` se ele não estiver presente. Em CI, ele pula via `RINGLY_SKIP_PREPARE=1`
+> ou `CI=true` para não duplicar build. Você raramente precisa pensar nele.
 
 Se o `doctor` reportar tudo verde, você está pronto. Se o AUMID falhar, rode
 `node dist/cli.js init --non-interactive` para registrar.
 
 ### Comandos de desenvolvimento
 
-| Comando             | O que faz                                            |
-| ------------------- | ---------------------------------------------------- |
-| `npm run dev`       | Build em modo watch (recompila ao salvar)            |
-| `npm run typecheck` | `tsc --noEmit` — checa tipos                         |
-| `npm run lint`      | Biome (lint + format check)                          |
-| `npm run lint:fix`  | Biome com auto-correção                              |
-| `npm test`          | Vitest (29 testes, ~330 ms)                          |
-| `npm run test:watch`| Vitest em watch                                      |
-| `npm run build`     | Build de produção (ESM + CJS + DTS)                  |
+| Comando                | O que faz                                              |
+| ---------------------- | ------------------------------------------------------ |
+| `npm run dev`          | Build em modo watch (recompila ao salvar)              |
+| `npm run typecheck`    | `tsc --noEmit` — checa tipos                           |
+| `npm run lint`         | Biome (lint + format check, inclui `plugin/hooks/`)    |
+| `npm run lint:fix`     | Biome com auto-correção                                |
+| `npm test`             | Vitest (94 testes, ~600 ms)                            |
+| `npm run test:watch`   | Vitest em watch                                        |
+| `npm run test:coverage`| Vitest com cobertura v8 (thresholds: 70% / 65% branch) |
+| `npm run build`        | Build de produção (ESM + CJS + DTS)                    |
+
+Antes de abrir PR, smoke-teste o bundle:
+
+```bash
+node dist/cli.js --version
+node dist/cli.js --help
+echo '{"hook_event_name":"Stop","cwd":"/tmp"}' | node dist/hook.js Stop
+```
 
 ### Padrões do código
 
-- **TypeScript estrito** (`strict: true`, `noUncheckedIndexedAccess: true`)
+- **TypeScript estrito** (`strict: true`, `noUncheckedIndexedAccess: true`,
+  `exactOptionalPropertyTypes: true`)
 - **Sem comentários** desnecessários — o código deve se explicar pelos nomes
 - **Sem `any`** sem motivo (Biome avisa)
 - **Falha silenciosa** no caminho do hook — qualquer exceção vira `logger.error()`,
-  o processo sempre retorna `exit 0` pra não quebrar o Claude Code do usuário
-- **Falha verbosa** no caminho da CLI — erros vão pra `stderr` e exit code != 0
+  o processo sempre retorna `exit 0` pra não quebrar o Claude Code do usuário.
+  Exemplo: `src/commands/hook.ts:39-44` (catch grande engloba tudo).
+- **Falha verbosa** no caminho da CLI — erros vão pra `stderr` e exit code != 0.
+  Exemplo: `src/cli.ts:135-145` (yargs `.fail()` + `process.exit(1)`).
 - **i18n via locales/** — toda string visível ao usuário entra em `pt-BR.json` e
-  `en-US.json`; não hardcode texto em código
+  `en-US.json`; não hardcode texto em código.
+- **Atomic writes** em arquivos de config (`~/.claude/settings.json`) — use
+  `atomicWriteFileSync` de `src/core/atomicWrite.ts`, nunca `fs.writeFileSync`
+  direto, pra evitar corrupção em writes concorrentes.
+
+### Limites e validação (segurança)
+
+Se você está adicionando código que toca payload de hook ou config externa,
+respeite estes limites já estabelecidos:
+
+- **Stdin do hook**: máximo **256 KB** (`src/core/stdin.ts`). Payloads reais do
+  Claude Code são <2 KB.
+- **Strings do payload**: truncadas em **500 caracteres** (`message`,
+  `agent_type`, `error_type`, `error`). Veja `src/core/payloadGuards.ts`.
+- **Paths do payload**: truncados em **1024 caracteres** (`cwd`, `transcript_path`).
+- **`appId`**: validado contra `/^[A-Za-z0-9._-]{1,128}$/`
+  (`src/core/config.ts::normalizeAppId`). Valores inválidos viram
+  `DEFAULT_APP_ID` com warn no log.
+- **Eventos**: whitelist hard-coded em `ALLOWED_EVENTS` (`Notification`, `Stop`,
+  `StopFailure`, `SubagentStop`). Não adicione evento novo sem atualizar a
+  whitelist em `hook.ts`, `hooks.json`, `dispatch.mjs` e `plugin.json` ao mesmo tempo.
 
 ### Como abrir uma PR
 
@@ -78,25 +114,71 @@ Se o `doctor` reportar tudo verde, você está pronto. Se o AUMID falhar, rode
    - **O quê** mudou
    - **Por quê** (link pra issue se houver)
    - **Como testar** (passos manuais ou comando de teste)
-6. O CI roda automático em Windows / macOS / Linux × Node 20/22. Se quebrar, ajusta.
+6. O CI roda automático em Windows / macOS / Linux × Node 20/22 com lint,
+   typecheck, testes, build e smoke (`node dist/cli.js --version/--help`). Se
+   quebrar, ajusta.
 7. Eu reviso e mergeio. Para mudanças grandes, vou pedir issue prévia.
+
+### Ciclo de release (manutenção, não pra contribuidores)
+
+Só pra você entender o fluxo:
+
+1. Bump da versão em **dois lugares**: `package.json` e
+   `plugin/.claude-plugin/plugin.json` — precisam estar sincronizados.
+2. Entrada no `CHANGELOG.md` em pt-BR + en-US (formato Keep a Changelog).
+3. Commit `chore(release): vX.Y.Z` + tag anotada `vX.Y.Z`.
+4. Push da tag dispara `.github/workflows/release.yml`, que valida (lint +
+   typecheck + test + build), confere se tag bate com `package.json` e
+   `plugin.json`, depois roda `npm publish --provenance --access public` e
+   cria a release no GitHub.
 
 ### Estrutura do projeto
 
 ```
 Ringly/
-├── .claude-plugin/marketplace.json   # entry do marketplace pro Claude Code
-├── plugin/                            # camada do plugin (hooks + dispatch.mjs)
+├── plugin/                            # camada do plugin do Claude Code
+│   ├── .claude-plugin/plugin.json    # manifesto + userConfig (idioma, eventos, etc.)
+│   └── hooks/
+│       ├── hooks.json                # mapeia os 4 eventos pro dispatch.mjs
+│       └── dispatch.mjs              # shim Node standalone (sem deps externas)
 ├── src/
-│   ├── cli.ts + hook.ts              # dois entries (CLI vs hook)
-│   ├── core/                         # config, i18n, eventMapper, logger, types
-│   ├── channels/                     # canais de notificação (toast hoje, webhook depois)
-│   ├── platform/{windows,macos,linux}/  # backends por SO
+│   ├── cli.ts + hook.ts              # dois entries separados (CLI vs hook crítico)
+│   ├── core/
+│   │   ├── atomicWrite.ts            # write tmp + rename atômico
+│   │   ├── claudeSettings.ts         # I/O de ~/.claude/settings.json
+│   │   ├── config.ts                 # loadConfig/saveConfig + applyEnvOverrides
+│   │   ├── eventMapper.ts            # payload → NotificationIntent
+│   │   ├── logger.ts                 # append + rotação a 5MB
+│   │   ├── notifier.ts               # orquestra notify() do hook
+│   │   ├── payloadGuards.ts          # sanitização do payload do hook
+│   │   ├── stdin.ts                  # read stdin com timeout + maxBytes
+│   │   ├── translator.ts             # i18n (pt-BR / en-US)
+│   │   ├── types.ts                  # tipos públicos
+│   │   └── xml.ts                    # escape XML
+│   ├── channels/                     # toast (Windows hoje); webhook futuro
+│   ├── platform/{windows,macos,linux}/  # backends por SO (macOS/Linux são stubs)
 │   ├── commands/                     # init, config, doctor, test, hook, uninstall
 │   ├── locales/                      # pt-BR.json, en-US.json
-│   └── tui/                          # telas Ink
-└── test/                             # 29 testes Vitest
+│   └── tui/                          # telas Ink (App.tsx + screens/)
+├── test/                             # 94 testes Vitest
+└── scripts/prepare.js                # build sob demanda no npm install
 ```
+
+### Sobre o `plugin/hooks/dispatch.mjs`
+
+Esse arquivo é **standalone por design** — não importa nada de `src/`, não usa
+TypeScript, não tem deps externas. Ele roda direto via `node dispatch.mjs` quando
+o Claude Code dispara um hook, antes mesmo da CLI estar instalada.
+
+Por isso ele **duplica** lógica que existe em `src/`:
+- O `escapeXml()` duplica `src/core/xml.ts::escapeXmlText`
+- O `detectLanguage()` duplica parte de `src/core/translator.ts::detectSystemLanguage`
+- O `EMBEDDED_TRANSLATIONS` duplica fragmentos dos `locales/*.json`
+
+**Se você mudar a versão em `src/`, lembre de mudar a versão correspondente em
+`dispatch.mjs` também.** O CI lintificará ambos via Biome (`plugin/hooks/` está
+no `biome.json#includes`), mas mudanças de comportamento não são detectadas
+automaticamente.
 
 ### Áreas que aceitam contribuição agora
 
@@ -147,36 +229,73 @@ first contribution.
 ```bash
 git clone https://github.com/nickdevcode/Ringly.git
 cd Ringly
-npm install
-npm run build
+npm install         # runs scripts/prepare.js, which builds dist/ if missing
+npm run build       # explicit build (idempotent)
 node dist/cli.js doctor
 ```
+
+> `scripts/prepare.js` runs automatically on `npm install` and compiles `dist/`
+> only if it's missing. In CI it skips via `RINGLY_SKIP_PREPARE=1` or `CI=true`
+> to avoid duplicate builds. You rarely need to think about it.
 
 If `doctor` reports everything green, you're ready. If AUMID fails, run
 `node dist/cli.js init --non-interactive` to register it.
 
 ### Development commands
 
-| Command             | What it does                                          |
-| ------------------- | ----------------------------------------------------- |
-| `npm run dev`       | Watch-mode build (recompiles on save)                 |
-| `npm run typecheck` | `tsc --noEmit` — type-checks the project              |
-| `npm run lint`      | Biome (lint + format check)                           |
-| `npm run lint:fix`  | Biome with auto-fix                                   |
-| `npm test`          | Vitest (29 tests, ~330 ms)                            |
-| `npm run test:watch`| Vitest in watch mode                                  |
-| `npm run build`     | Production build (ESM + CJS + DTS)                    |
+| Command                 | What it does                                            |
+| ----------------------- | ------------------------------------------------------- |
+| `npm run dev`           | Watch-mode build (recompiles on save)                   |
+| `npm run typecheck`     | `tsc --noEmit` — type-checks the project                |
+| `npm run lint`          | Biome (lint + format check, covers `plugin/hooks/`)     |
+| `npm run lint:fix`      | Biome with auto-fix                                     |
+| `npm test`              | Vitest (94 tests, ~600 ms)                              |
+| `npm run test:watch`    | Vitest in watch mode                                    |
+| `npm run test:coverage` | Vitest with v8 coverage (thresholds: 70% / 65% branch)  |
+| `npm run build`         | Production build (ESM + CJS + DTS)                      |
+
+Before opening a PR, smoke-test the bundle:
+
+```bash
+node dist/cli.js --version
+node dist/cli.js --help
+echo '{"hook_event_name":"Stop","cwd":"/tmp"}' | node dist/hook.js Stop
+```
 
 ### Code standards
 
-- **Strict TypeScript** (`strict: true`, `noUncheckedIndexedAccess: true`)
+- **Strict TypeScript** (`strict: true`, `noUncheckedIndexedAccess: true`,
+  `exactOptionalPropertyTypes: true`)
 - **No unnecessary comments** — code should be self-explanatory by names
 - **No `any`** without justification (Biome warns)
 - **Silent failure** on the hook path — every exception becomes `logger.error()`,
-  the process always exits `0` so it never breaks the user's Claude Code
-- **Verbose failure** on the CLI path — errors go to `stderr` with a non-zero exit
+  the process always exits `0` so it never breaks the user's Claude Code.
+  Example: `src/commands/hook.ts:39-44` (outer catch wraps everything).
+- **Verbose failure** on the CLI path — errors go to `stderr` with a non-zero exit.
+  Example: `src/cli.ts:135-145` (yargs `.fail()` + `process.exit(1)`).
 - **i18n via locales/** — every user-facing string lives in `pt-BR.json` and
-  `en-US.json`; never hardcode text in source
+  `en-US.json`; never hardcode text in source.
+- **Atomic writes** on config files (`~/.claude/settings.json`) — use
+  `atomicWriteFileSync` from `src/core/atomicWrite.ts`, never raw
+  `fs.writeFileSync`, to avoid corruption from concurrent writes.
+
+### Limits and validation (security)
+
+If you're adding code that touches hook payloads or external config, respect
+these established limits:
+
+- **Hook stdin**: maximum **256 KB** (`src/core/stdin.ts`). Real Claude Code
+  payloads are <2 KB.
+- **Payload strings**: truncated to **500 characters** (`message`, `agent_type`,
+  `error_type`, `error`). See `src/core/payloadGuards.ts`.
+- **Payload paths**: truncated to **1024 characters** (`cwd`, `transcript_path`).
+- **`appId`**: validated against `/^[A-Za-z0-9._-]{1,128}$/`
+  (`src/core/config.ts::normalizeAppId`). Invalid values fall back to
+  `DEFAULT_APP_ID` with a warning log.
+- **Events**: hard-coded whitelist in `ALLOWED_EVENTS` (`Notification`, `Stop`,
+  `StopFailure`, `SubagentStop`). Don't add a new event without updating the
+  whitelist in `hook.ts`, `hooks.json`, `dispatch.mjs`, and `plugin.json` at
+  the same time.
 
 ### How to open a PR
 
@@ -194,25 +313,70 @@ If `doctor` reports everything green, you're ready. If AUMID fails, run
    - **What** changed
    - **Why** (link to the issue if any)
    - **How to test** (manual steps or test command)
-6. CI runs automatically on Windows / macOS / Linux × Node 20/22. Fix any failures.
+6. CI runs automatically on Windows / macOS / Linux × Node 20/22 with lint,
+   typecheck, tests, build, and smoke (`node dist/cli.js --version/--help`).
+   Fix any failures.
 7. I review and merge. For big changes, I'll ask for a prior issue.
+
+### Release cycle (maintenance, not for contributors)
+
+For context, here's the flow:
+
+1. Bump the version in **two places**: `package.json` and
+   `plugin/.claude-plugin/plugin.json` — they must stay in sync.
+2. Add a `CHANGELOG.md` entry in pt-BR + en-US (Keep a Changelog format).
+3. Commit `chore(release): vX.Y.Z` + annotated tag `vX.Y.Z`.
+4. Pushing the tag triggers `.github/workflows/release.yml`, which validates
+   (lint + typecheck + test + build), confirms the tag matches both
+   `package.json` and `plugin.json`, then runs
+   `npm publish --provenance --access public` and creates the GitHub release.
 
 ### Project layout
 
 ```
 Ringly/
-├── .claude-plugin/marketplace.json   # marketplace entry for Claude Code
-├── plugin/                            # plugin layer (hooks + dispatch.mjs)
+├── plugin/                            # Claude Code plugin layer
+│   ├── .claude-plugin/plugin.json    # manifest + userConfig (language, events, etc.)
+│   └── hooks/
+│       ├── hooks.json                # maps the 4 events to dispatch.mjs
+│       └── dispatch.mjs              # standalone Node shim (no external deps)
 ├── src/
-│   ├── cli.ts + hook.ts              # two entries (CLI vs hook)
-│   ├── core/                         # config, i18n, eventMapper, logger, types
-│   ├── channels/                     # notification channels (toast now, webhook later)
-│   ├── platform/{windows,macos,linux}/  # OS back-ends
+│   ├── cli.ts + hook.ts              # two separate entries (CLI vs hot-path hook)
+│   ├── core/
+│   │   ├── atomicWrite.ts            # tmp + atomic rename writer
+│   │   ├── claudeSettings.ts         # ~/.claude/settings.json I/O
+│   │   ├── config.ts                 # loadConfig/saveConfig + applyEnvOverrides
+│   │   ├── eventMapper.ts            # payload → NotificationIntent
+│   │   ├── logger.ts                 # append + 5 MB rotation
+│   │   ├── notifier.ts               # orchestrates the hook's notify()
+│   │   ├── payloadGuards.ts          # hook payload sanitization
+│   │   ├── stdin.ts                  # read stdin with timeout + maxBytes
+│   │   ├── translator.ts             # i18n (pt-BR / en-US)
+│   │   ├── types.ts                  # public types
+│   │   └── xml.ts                    # XML escape
+│   ├── channels/                     # toast (Windows today); webhook future
+│   ├── platform/{windows,macos,linux}/  # OS back-ends (macOS/Linux are stubs)
 │   ├── commands/                     # init, config, doctor, test, hook, uninstall
 │   ├── locales/                      # pt-BR.json, en-US.json
-│   └── tui/                          # Ink screens
-└── test/                             # 29 Vitest tests
+│   └── tui/                          # Ink screens (App.tsx + screens/)
+├── test/                             # 94 Vitest tests
+└── scripts/prepare.js                # on-demand build during npm install
 ```
+
+### About `plugin/hooks/dispatch.mjs`
+
+This file is **standalone by design** — it imports nothing from `src/`, uses no
+TypeScript, and has no external deps. It runs via `node dispatch.mjs` directly
+when Claude Code fires a hook, even before the CLI is installed.
+
+Because of that it **duplicates** logic that also lives in `src/`:
+- `escapeXml()` duplicates `src/core/xml.ts::escapeXmlText`
+- `detectLanguage()` duplicates part of `src/core/translator.ts::detectSystemLanguage`
+- `EMBEDDED_TRANSLATIONS` duplicates fragments of `locales/*.json`
+
+**If you change the version in `src/`, remember to change the matching version
+in `dispatch.mjs` too.** CI will lint both via Biome (`plugin/hooks/` is in
+`biome.json#includes`), but behavioral drift is not detected automatically.
 
 ### Areas open for contribution right now
 
