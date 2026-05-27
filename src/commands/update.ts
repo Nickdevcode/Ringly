@@ -12,10 +12,18 @@
 import { type SpawnOptions, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import chalk from "chalk";
+import {
+  type ChangelogGroup,
+  extractSection,
+  findEntry,
+  parseChangelog,
+  readPackagedChangelog,
+} from "../core/changelog.js";
 import { DEFAULT_CONFIG, loadConfig } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { readOwnVersion } from "../core/ownVersion.js";
-import { createTranslator } from "../core/translator.js";
+import { createTranslator, type Translator } from "../core/translator.js";
+import type { SupportedLanguage } from "../core/types.js";
 import { checkForUpdate, type UpdateCheckResult } from "../core/updateCheck.js";
 
 export interface RunUpdateOptions {
@@ -23,11 +31,37 @@ export interface RunUpdateOptions {
   yes: boolean;
 }
 
+export interface SnapshotNotesGroup {
+  /** Localized title ("Novidades", "What's new", …). */
+  title: string;
+  /** Plain-text bullets, ready for the slash command to rewrite. */
+  items: string[];
+}
+
+export interface SnapshotNotes {
+  version: string;
+  heading: string;
+  groups: SnapshotNotesGroup[];
+}
+
 interface CheckSnapshot {
   current: string;
   latest: string | null;
   hasUpdate: boolean;
   reachable: boolean;
+  /**
+   * Language the slash command should answer in. Always a concrete locale —
+   * "auto" is already resolved here via `Translator.language`. This is the
+   * single source of truth the `/ringly-update` `.md` consumes to decide
+   * the language for every user-facing line it writes itself.
+   */
+  language: SupportedLanguage;
+  /**
+   * Localized release notes for `latest`, when both `hasUpdate` is true and
+   * the packaged CHANGELOG.md has an entry for that version. `null` in every
+   * other case (no update, no CHANGELOG, parse failure, version not listed).
+   */
+  notes: SnapshotNotes | null;
 }
 
 const PACKAGE_NAME = "ringly";
@@ -49,8 +83,10 @@ export async function runUpdate(options: RunUpdateOptions): Promise<void> {
     currentVersion: current,
   });
 
+  const notes = result?.hasUpdate ? buildNotesFor(result.latestVersion, translator) : null;
+
   if (options.check) {
-    emitJsonSnapshot(current, result);
+    emitJsonSnapshot(current, result, translator, notes);
     return;
   }
 
@@ -83,6 +119,10 @@ export async function runUpdate(options: RunUpdateOptions): Promise<void> {
     `  ${chalk.yellow("◉")}  ${translator.t("cli.update.available", { current: result.currentVersion, latest: result.latestVersion })}`,
   );
   console.log("");
+
+  if (notes) {
+    printNotes(notes);
+  }
 
   const confirmed = options.yes ? true : await askConfirmation(translator, result.latestVersion);
   if (!confirmed) {
@@ -122,16 +162,97 @@ export async function runUpdate(options: RunUpdateOptions): Promise<void> {
   process.exitCode = 1;
 }
 
-function emitJsonSnapshot(current: string, result: UpdateCheckResult | null): void {
+function emitJsonSnapshot(
+  current: string,
+  result: UpdateCheckResult | null,
+  translator: Translator,
+  notes: SnapshotNotes | null,
+): void {
   const snapshot: CheckSnapshot = result
     ? {
         current: result.currentVersion,
         latest: result.latestVersion,
         hasUpdate: result.hasUpdate,
         reachable: true,
+        language: translator.language,
+        notes,
       }
-    : { current, latest: null, hasUpdate: false, reachable: false };
+    : {
+        current,
+        latest: null,
+        hasUpdate: false,
+        reachable: false,
+        language: translator.language,
+        notes: null,
+      };
   console.log(JSON.stringify(snapshot));
+}
+
+/**
+ * Maps a CHANGELOG group heading (in pt-BR or en-US, as the author wrote it)
+ * to one of the canonical translator keys. Anything that doesn't fit the
+ * five well-known buckets falls through to `notes_group.other`, which keeps
+ * the parser tolerant of new section names without breaking the snapshot.
+ */
+function localizedGroupTitle(heading: string, translator: Translator): string {
+  const normalized = heading.toLowerCase().trim();
+
+  const ADDED = ["adicionado", "added", "novo", "new"];
+  const CHANGED = ["mudado", "changed"];
+  const FIXED = ["corrigido", "fixed", "fixes"];
+  const BREAKING = [
+    "mudança incompatível",
+    "mudanca incompativel",
+    "breaking change",
+    "breaking changes",
+  ];
+  const REMOVED = ["removido", "removed", "deprecated", "depreciado"];
+
+  if (ADDED.includes(normalized)) return translator.t("cli.update.notes_group.added");
+  if (CHANGED.includes(normalized)) return translator.t("cli.update.notes_group.changed");
+  if (FIXED.includes(normalized)) return translator.t("cli.update.notes_group.fixed");
+  if (BREAKING.includes(normalized)) return translator.t("cli.update.notes_group.breaking");
+  if (REMOVED.includes(normalized)) return translator.t("cli.update.notes_group.removed");
+  return translator.t("cli.update.notes_group.other");
+}
+
+/**
+ * Builds the localized SnapshotNotes for a given version, by reading the
+ * packaged CHANGELOG and selecting the section for `translator.language`.
+ * Returns `null` when the CHANGELOG is missing, unparseable, or doesn't
+ * have an entry for that version.
+ */
+export function buildNotesFor(version: string, translator: Translator): SnapshotNotes | null {
+  const raw = readPackagedChangelog(import.meta.url);
+  if (!raw) return null;
+  const entries = parseChangelog(raw);
+  const entry = findEntry(entries, version);
+  if (!entry) return null;
+
+  const groups: ChangelogGroup[] = extractSection(entry, translator.language);
+  if (groups.length === 0) return null;
+
+  return {
+    version,
+    heading: translator.t("cli.update.notes_heading", { version }),
+    groups: groups.map((g) => ({
+      title: localizedGroupTitle(g.heading, translator),
+      items: g.bullets,
+    })),
+  };
+}
+
+function printNotes(notes: SnapshotNotes): void {
+  console.log(`  ${chalk.bold(notes.heading)}`);
+  console.log("");
+  for (const group of notes.groups) {
+    if (group.items.length === 0) continue;
+    console.log(`  ${chalk.bold.cyan(group.title)}`);
+    for (const item of group.items) {
+      console.log(`    ${chalk.dim("•")} ${item}`);
+    }
+    console.log("");
+  }
 }
 
 function printHeader(translator: ReturnType<typeof createTranslator>): void {

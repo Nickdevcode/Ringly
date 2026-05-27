@@ -2,8 +2,31 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { logger } from "./core/logger.js";
 
+/**
+ * Returns true when the top-level argv requests help WITHOUT naming a
+ * subcommand (e.g. `ringly`, `ringly --help`, `ringly -h`). When a subcommand
+ * is present (e.g. `ringly update --help`), yargs's per-command help is more
+ * useful, so we let it through untouched.
+ */
+function isTopLevelHelpRequest(argv: readonly string[]): boolean {
+  const args = argv.filter((a) => a.length > 0);
+  if (args.length === 0) return true;
+  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h" || args[0] === "help")) {
+    return true;
+  }
+  return false;
+}
+
 async function main(): Promise<void> {
-  await yargs(hideBin(process.argv))
+  const argv = hideBin(process.argv);
+
+  if (isTopLevelHelpRequest(argv)) {
+    const mod = await import("./commands/help.js");
+    await mod.runHelp();
+    return;
+  }
+
+  await yargs(argv)
     .scriptName("ringly")
     .usage("$0 <command> [options]")
     .command(
@@ -115,6 +138,15 @@ async function main(): Promise<void> {
         await mod.runUninstall({
           keepConfig: argv["keep-config"],
         });
+      },
+    )
+    .command(
+      "help",
+      "Show the localized list of Ringly commands",
+      () => {},
+      async () => {
+        const mod = await import("./commands/help.js");
+        await mod.runHelp();
       },
     )
     .command(

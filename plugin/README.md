@@ -10,9 +10,18 @@ them to a shared `dispatch.mjs` shim that:
 2. Falls back to spawning the `ringly` CLI binary if installed globally,
 3. Falls back to an **embedded toast** as a last resort (notification events only).
 
-The plugin also ships a slash command — `/ringly-update` — that lets you check
-for and install a newer Ringly release without leaving Claude Code. A
-once-a-day check runs in the background on `SessionStart` and fires a native
+The plugin also ships two slash commands:
+
+- **`/ringly-update`** — checks npm for a newer Ringly release, shows a
+  friendly summary of what changed (read from the packaged `CHANGELOG.md`),
+  and installs it for you without leaving Claude Code. All messages render
+  in the configured language.
+- **`/ringly-help`** — runs the translated `ringly help` and shows the
+  command list straight in the chat, with a clear warning that these
+  commands must run in your external terminal (PowerShell, Bash, etc.),
+  not inside Claude Code.
+
+A once-a-day check runs in the background on `SessionStart` and fires a native
 toast when a new version is available on npm.
 
 > ⚠️ **This plugin is not standalone.** On Windows 10/11, the

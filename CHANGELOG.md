@@ -5,6 +5,56 @@
 
 ---
 
+## [0.6.0] — 2026-05-26
+
+### 🇧🇷 Português
+
+**Adicionado**
+
+- **Resumo amigável do que mudou direto no `/ringly-update`** (`plugin/commands/ringly-update.md`, `src/commands/update.ts`, `src/core/changelog.ts`). Antes, quando o slash command achava uma versão nova, ele só perguntava "Atualizar Ringly de 0.5.2 para 0.6.0?" — sem dar nenhuma pista do que tinha mudado. Quem é tech-savvy abria o CHANGELOG no GitHub; quem não é, atualizava no escuro. Agora, antes de pedir confirmação, o comando lê o `CHANGELOG.md` empacotado (que já é bilíngue), pega a seção da nova versão e mostra um resumo curto (≤10 linhas) de **Novidades / Mudou / Correções / ⚠ Pode quebrar coisas**. O Claude é instruído a reescrever os bullets em linguagem comum (sem caminhos de arquivo, sem CVE, sem jargão de release) pra quem não é desenvolvedor entender. Sem nova dependência de runtime — só `node:fs` + regex, com parser próprio (`src/core/changelog.ts`) e fallback gracioso ("Notas dessa versão não estão disponíveis") quando o CHANGELOG não tem a entry.
+- **Novo slash command `/ringly-help`** (`plugin/commands/ringly-help.md`). Dispara o `ringly help` traduzido e mostra a saída direto no chat do Claude Code, com um aviso bem visível de que esses comandos rodam **no seu terminal externo (PowerShell, Bash, etc.)**, não dentro do Claude Code. Útil quando você esquece quais subcomandos existem (`test`, `init`, `config`, `doctor`, `update`, `uninstall`) ou quer ver tudo numa lista limpa, no idioma certo, sem precisar abrir um terminal só pra isso.
+- **Subcomando `ringly help` no CLI** (`src/commands/help.ts`, `src/cli.ts`). Substitui o `--help` cru do yargs (que era sempre em inglês fixo) por uma versão traduzida que respeita o `pluginConfigs.ringly.options.language` do `~/.claude/settings.json`. Caixa cyan no topo, aviso amarelo, lista dos 7 subcomandos com descrição curta no idioma do usuário, footer com `ringly <comando> --help` pra detalhes específicos. Funciona como `ringly help`, `ringly --help` e `ringly -h` (e `ringly` sem argumento). O `ringly <comando> --help` específico continua usando o yargs raw em inglês (não é o caminho descoberto pelo slash).
+
+**Mudado**
+
+- **`/ringly-update` agora respeita o idioma configurado em todas as mensagens próprias** (`plugin/commands/ringly-update.md`, `src/commands/update.ts`). Antes, o `.md` do slash era escrito em inglês e o modelo (Claude Code) replicava o tom inglês nas mensagens que ele mesmo escrevia: cabeçalhos dos passos, pergunta do `AskUserQuestion`, "Update cancelled", "couldn't reach npm", etc. Só os textos que vinham impressos pelo CLI já saíam traduzidos. A causa: o slash command roda em um shell que o Claude Code cria e o `CLAUDE_PLUGIN_OPTION_LANGUAGE` não é exportado pela Anthropic desde a v0.5.0 (que dropou o `userConfig`). A correção: o `ringly update --check` agora embute o idioma **já resolvido** dentro do JSON snapshot (campo `language: "pt-BR" | "en-US"`, nunca "auto") e o `.md` foi reescrito pra ler esse campo logo no início e usar como fonte única de verdade do idioma a partir daí. Resultado: se você está em pt-BR, **tudo** que aparece no chat do Claude Code durante o update vem em português.
+- **JSON snapshot do `ringly update --check` ampliado** (`src/commands/update.ts`). Schema novo: `{current, latest, hasUpdate, reachable, language, notes}`. Os 4 campos antigos continuam idênticos (consumidor único, sem breaking change). Os 2 novos são `language` (resolvido server-side com fallback Intl, nunca "auto") e `notes` (estrutura `{version, heading, groups: [{title, items}]}` no idioma do usuário, ou `null` quando sem update / sem CHANGELOG / parse falhou).
+- **Modo interativo do `ringly update` também imprime as notas localizadas antes da confirmação** (`src/commands/update.ts`). Paridade entre terminal e slash — quem rodar `ringly update` num PowerShell agora também vê o resumo do que mudou antes de decidir se atualiza.
+
+**Testes**
+
+- **+30 testes novos** (de 133 para 163). `test/changelog.test.ts` cobre 18 cenários do parser (entradas múltiplas, fallback de idioma, bullets aninhados, bold/code strippado, grupos vazios, datas ausentes, prereleases). `test/help.test.ts` cobre 5 cenários do help renderizado (idioma pt-BR vs en-US, sem vazamentos cross-locale, sem expor o `hook` interno). `test/update.test.ts` cobre 6 cenários novos do `buildNotesFor` rodando sobre o CHANGELOG real do projeto (versões 0.5.2, 0.5.1, 0.5.0, e versão inexistente).
+
+**Notas pra quem tá vindo da v0.5.2**
+
+- Nada quebra. O JSON do `ringly update --check` continua com os mesmos 4 campos antigos — só ganhou 2 novos. O `ringly --help` agora aparece traduzido em vez do output yargs em inglês, mas o conteúdo (subcomandos disponíveis) é o mesmo. O hook bundle (`dist/hook.js` / `dist/hook.cjs`) continua exatamente do mesmo tamanho — o módulo `changelog.ts` só é carregado pelo CLI, nunca pelo hot path. Os 133 testes anteriores seguem passando sem mudança de comportamento.
+- Pra ver o novo fluxo em ação, rode `/ringly-update` no Claude Code (ou `ringly update` no terminal) na próxima vez que tiver uma versão nova disponível.
+
+### 🇺🇸 English
+
+**Added**
+
+- **Friendly summary of what changed, right inside `/ringly-update`** (`plugin/commands/ringly-update.md`, `src/commands/update.ts`, `src/core/changelog.ts`). Previously, when the slash command found a new version, it just asked "Update Ringly from 0.5.2 to 0.6.0?" — with no hint of what actually changed. Tech-savvy users opened CHANGELOG on GitHub; everyone else updated blindly. Now, before asking for confirmation, the command reads the packaged `CHANGELOG.md` (already bilingual), grabs the section for the new version, and prints a short summary (≤10 lines) of **What's new / Changes / Fixes / ⚠ Breaking changes**. Claude is instructed to rewrite the bullets in plain language (drop file paths, CVEs, release jargon) so non-developers can understand. No new runtime dependency — only `node:fs` + regex, with a custom parser (`src/core/changelog.ts`) and graceful fallback ("Release notes for this version aren't available") when the CHANGELOG has no entry.
+- **New `/ringly-help` slash command** (`plugin/commands/ringly-help.md`). Runs the translated `ringly help` and shows the output straight inside the Claude Code chat, with a very visible warning that those commands run **in your external terminal (PowerShell, Bash, etc.)**, not inside Claude Code. Handy when you forget which subcommands exist (`test`, `init`, `config`, `doctor`, `update`, `uninstall`) or just want to see them all in one clean list, in the right language, without opening a terminal just for that.
+- **`ringly help` subcommand in the CLI** (`src/commands/help.ts`, `src/cli.ts`). Replaces yargs' raw `--help` (always hardcoded in English) with a translated version that honours `pluginConfigs.ringly.options.language` from `~/.claude/settings.json`. Cyan box at the top, yellow warning, list of all 7 subcommands with short descriptions in the user's language, footer pointing at `ringly <command> --help` for command-specific details. Works as `ringly help`, `ringly --help`, `ringly -h`, and `ringly` with no args. Per-command `ringly <command> --help` still uses yargs' raw English output (it's not the path the slash command surfaces).
+
+**Changed**
+
+- **`/ringly-update` now respects the configured language across every message it writes itself** (`plugin/commands/ringly-update.md`, `src/commands/update.ts`). Previously the slash command's `.md` was written in English, so the model (Claude Code) mirrored the English tone in everything it wrote on its own: step headers, the `AskUserQuestion` text, "Update cancelled", "couldn't reach npm", etc. Only the text printed by the CLI itself was localized. Root cause: the slash command runs in a shell created by Claude Code and `CLAUDE_PLUGIN_OPTION_LANGUAGE` is no longer exported by Anthropic since v0.5.0 (when we dropped `userConfig`). Fix: `ringly update --check` now embeds the **already-resolved** language inside the JSON snapshot (field `language: "pt-BR" | "en-US"`, never "auto"), and the `.md` was rewritten to read that field right after step 2 and use it as the single source of truth for language from that point on. Result: if you're on pt-BR, **everything** that shows up in Claude Code's chat during the update comes in Portuguese.
+- **`ringly update --check` JSON snapshot extended** (`src/commands/update.ts`). New shape: `{current, latest, hasUpdate, reachable, language, notes}`. The 4 old fields stay identical (single consumer, no breaking change). The 2 new ones are `language` (resolved server-side via Intl fallback, never "auto") and `notes` (structured `{version, heading, groups: [{title, items}]}` in the user's language, or `null` when there's no update / no CHANGELOG / parse failed).
+- **Interactive `ringly update` now also prints localized notes before the confirmation prompt** (`src/commands/update.ts`). Parity between terminal and slash command — running `ringly update` from a PowerShell now also shows the what's-new summary before deciding whether to install.
+
+**Tests**
+
+- **+30 new tests** (from 133 to 163). `test/changelog.test.ts` covers 18 parser scenarios (multiple entries, language fallback, nested bullets, bold/code stripping, empty groups, missing dates, prereleases). `test/help.test.ts` covers 5 rendered-help scenarios (pt-BR vs en-US, no cross-locale leaks, the internal `hook` command stays hidden). `test/update.test.ts` covers 6 new `buildNotesFor` cases running against the project's actual CHANGELOG (versions 0.5.2, 0.5.1, 0.5.0, and a non-existent version).
+
+**Notes for v0.5.2 users**
+
+- Nothing breaks. `ringly update --check` JSON keeps the same 4 old fields — it just gained 2 new ones. `ringly --help` now shows up translated instead of yargs' raw English output, but the content (available subcommands) is the same. The hook bundle (`dist/hook.js` / `dist/hook.cjs`) stays exactly the same size — `changelog.ts` only loads from the CLI, never from the hot path. All 133 previous tests pass with no behaviour change.
+- To see the new flow in action, run `/ringly-update` in Claude Code (or `ringly update` in a terminal) the next time a new version is available.
+
+---
+
 ## [0.5.2] — 2026-05-26
 
 ### 🇧🇷 Português

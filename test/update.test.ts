@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildNpmInstallSpec } from "../src/commands/update.js";
+import { buildNotesFor, buildNpmInstallSpec } from "../src/commands/update.js";
+import { createTranslator } from "../src/core/translator.js";
 
 /**
  * Regression coverage for the Windows `spawn EINVAL` bug.
@@ -34,6 +35,70 @@ describe("buildNpmInstallSpec", () => {
       const spec = buildNpmInstallSpec(platform);
       expect(spec.options.stdio).toEqual(["ignore", "pipe", "pipe"]);
       expect(spec.options.windowsHide).toBe(true);
+    }
+  });
+});
+
+/**
+ * `buildNotesFor` reads the actual packaged CHANGELOG.md (via
+ * `readPackagedChangelog`) and produces the `notes` field embedded in the
+ * `ringly update --check` JSON snapshot. The cases below pin down the
+ * three outcomes that matter for the slash command: known version →
+ * localized notes, unknown version → null, language picks the right
+ * section.
+ */
+describe("buildNotesFor", () => {
+  it("returns localized notes for the current packaged version (pt-BR)", () => {
+    const translator = createTranslator("pt-BR");
+    // The CHANGELOG must include the current package version — this is
+    // the same version readOwnVersion would report inside the CLI.
+    const notes = buildNotesFor("0.5.2", translator);
+    expect(notes).not.toBeNull();
+    expect(notes?.version).toBe("0.5.2");
+    expect(notes?.heading).toContain("O que mudou na versão 0.5.2");
+    expect(notes?.groups.length).toBeGreaterThan(0);
+    // The first group of the 0.5.2 entry is "Mudado" in pt-BR.
+    expect(notes?.groups[0]?.title).toBe("Mudou");
+  });
+
+  it("returns en-US group titles when the translator language is en-US", () => {
+    const translator = createTranslator("en-US");
+    const notes = buildNotesFor("0.5.2", translator);
+    expect(notes).not.toBeNull();
+    expect(notes?.heading).toContain("What's new in version 0.5.2");
+    expect(notes?.groups[0]?.title).toBe("Changes");
+  });
+
+  it("returns null for a version that the CHANGELOG does not list", () => {
+    const translator = createTranslator("pt-BR");
+    expect(buildNotesFor("9.9.9", translator)).toBeNull();
+  });
+
+  it("maps a 'Corrigido' heading to the localized 'Correções' title", () => {
+    const translator = createTranslator("pt-BR");
+    // v0.5.1 has a 'Corrigido' group (Windows spawn EINVAL fix).
+    const notes = buildNotesFor("0.5.1", translator);
+    expect(notes).not.toBeNull();
+    const titles = notes?.groups.map((g) => g.title) ?? [];
+    expect(titles).toContain("Correções");
+  });
+
+  it("maps a 'Mudança incompatível' heading to the breaking-change title", () => {
+    const translator = createTranslator("pt-BR");
+    // v0.5.0 is a breaking change (removed userConfig).
+    const notes = buildNotesFor("0.5.0", translator);
+    expect(notes).not.toBeNull();
+    const titles = notes?.groups.map((g) => g.title) ?? [];
+    expect(titles.some((t) => t.includes("Pode quebrar coisas"))).toBe(true);
+  });
+
+  it("produces plain-text bullets with bold and code markers stripped", () => {
+    const translator = createTranslator("pt-BR");
+    const notes = buildNotesFor("0.5.2", translator);
+    const allItems = notes?.groups.flatMap((g) => g.items) ?? [];
+    for (const item of allItems) {
+      expect(item).not.toMatch(/\*\*/);
+      expect(item).not.toMatch(/^`|`$/);
     }
   });
 });

@@ -186,20 +186,27 @@ As chaves abaixo ficam em `pluginConfigs.ringly.options` dentro de `~/.claude/se
 ### Comandos da CLI
 
 ```bash
+ringly help                    # lista os comandos no idioma configurado
 ringly init                    # instalador interativo (TUI)
 ringly init --non-interactive  # aplica defaults, sem TUI
 ringly config                  # reconfigura interativamente
 ringly doctor                  # diagnóstico do ambiente local
 ringly test --event Stop --lang pt-BR
 ringly update                  # checa o npm e roda a atualização guiada
-ringly update --check          # só imprime JSON {current, latest, hasUpdate, reachable}
+ringly update --check          # imprime JSON {current, latest, hasUpdate, reachable, language, notes}
 ringly update --yes            # pula a confirmação e instala direto
 ringly uninstall               # remove AUMID, atalho e configurações do Ringly
 ```
 
-> Dentro do Claude Code, o slash command `/ringly-update` faz a mesma coisa que
-> `ringly update`, com confirmação visual via `AskUserQuestion` e instrução
-> automática pra rodar `/reload-plugins` no final.
+> Dentro do Claude Code, dois slash commands cobrem o dia a dia:
+>
+> - **`/ringly-update`** — espelha `ringly update`, com confirmação visual via
+>   `AskUserQuestion`, **resumo amigável do que mudou na nova versão** (lido
+>   do `CHANGELOG.md` empacotado) e instrução automática pra rodar
+>   `/reload-plugins` no final. Tudo aparece no idioma configurado.
+> - **`/ringly-help`** — roda `ringly help` e mostra a lista de comandos
+>   direto no chat (com aviso de que esses comandos rodam no seu terminal
+>   externo, não dentro do Claude Code).
 
 ### Como funciona
 
@@ -429,20 +436,27 @@ The keys below live in `pluginConfigs.ringly.options` inside `~/.claude/settings
 ### CLI commands
 
 ```bash
+ringly help                    # list the commands in the configured language
 ringly init                    # interactive installer (TUI)
 ringly init --non-interactive  # apply defaults, skip the TUI
 ringly config                  # reconfigure interactively
 ringly doctor                  # run a diagnostic of the local setup
 ringly test --event Stop --lang pt-BR
 ringly update                  # check npm and run the guided update
-ringly update --check          # just print {current, latest, hasUpdate, reachable} JSON
+ringly update --check          # print {current, latest, hasUpdate, reachable, language, notes} JSON
 ringly update --yes            # skip the prompt and install directly
 ringly uninstall               # remove AUMID, shortcut, and Ringly settings
 ```
 
-> Inside Claude Code, the `/ringly-update` slash command does the same thing as
-> `ringly update`, with visual confirmation via `AskUserQuestion` and an
-> automatic prompt to run `/reload-plugins` at the end.
+> Inside Claude Code, two slash commands cover the everyday flow:
+>
+> - **`/ringly-update`** — mirrors `ringly update`, with visual confirmation via
+>   `AskUserQuestion`, **a friendly summary of what changed in the new version**
+>   (read from the packaged `CHANGELOG.md`), and an automatic prompt to run
+>   `/reload-plugins` at the end. Everything shows up in the configured language.
+> - **`/ringly-help`** — runs `ringly help` and shows the command list straight
+>   in the chat (with a warning that these commands must run in your external
+>   terminal, not inside Claude Code).
 
 ### How it works
 
