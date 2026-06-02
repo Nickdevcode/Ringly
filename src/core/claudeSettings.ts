@@ -12,6 +12,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { EVENTS, optionField } from "./events.js";
 import { logger } from "./logger.js";
 import type { RinglyConfig } from "./types.js";
 
@@ -47,13 +48,18 @@ export function readClaudeSettings(): ClaudeSettings {
 
 export interface RinglyPluginOptions {
   language?: string;
+  sound?: boolean;
+  debug?: boolean;
+  check_updates?: boolean;
+  // Per-event toggles persist as `events_<configKey>` (e.g. `events_stop`).
+  // The index signature lets the registry drive the key set; the four
+  // historical keys below are kept explicit for documentation/discoverability.
+  // (`| undefined` is required by `noUncheckedIndexedAccess`.)
   events_notification?: boolean;
   events_stop?: boolean;
   events_stopFailure?: boolean;
   events_subagentStop?: boolean;
-  sound?: boolean;
-  debug?: boolean;
-  check_updates?: boolean;
+  [key: `events_${string}`]: boolean | undefined;
 }
 
 export function readRinglyPluginOptions(): RinglyPluginOptions {
@@ -70,15 +76,18 @@ export function pluginOptionsToRinglyConfig(
   const language =
     lang === "auto" || lang === "pt-BR" || lang === "en-US" ? lang : defaults.language;
 
+  // One `events_<configKey>` read per registered event, falling back to the
+  // default when the key is absent — so old settings.json files (which only
+  // have the original keys) keep working and new events default to off.
+  const events = { ...defaults.events };
+  for (const e of EVENTS) {
+    events[e.configKey] = options[optionField(e.configKey)] ?? defaults.events[e.configKey];
+  }
+
   return {
     ...defaults,
     language,
-    events: {
-      notification: options.events_notification ?? defaults.events.notification,
-      stop: options.events_stop ?? defaults.events.stop,
-      stopFailure: options.events_stopFailure ?? defaults.events.stopFailure,
-      subagentStop: options.events_subagentStop ?? defaults.events.subagentStop,
-    },
+    events,
     sound: options.sound ?? defaults.sound,
     debug: options.debug ?? defaults.debug,
     checkUpdates: options.check_updates ?? defaults.checkUpdates,

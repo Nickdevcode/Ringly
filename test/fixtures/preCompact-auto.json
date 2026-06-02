@@ -1,0 +1,5 @@
+{
+  "hook_event_name": "PreCompact",
+  "cwd": "C:/dev/NewsDev",
+  "trigger": "auto"
+}

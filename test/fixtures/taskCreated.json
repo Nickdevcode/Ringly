@@ -1,0 +1,5 @@
+{
+  "hook_event_name": "TaskCreated",
+  "cwd": "C:/dev/NewsDev",
+  "agent_type": "gsd-executor"
+}

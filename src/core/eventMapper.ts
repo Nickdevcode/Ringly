@@ -1,4 +1,5 @@
 import { basename } from "node:path";
+import { EVENT_BY_NAME, type EventDescriptor } from "./events.js";
 import type { Translator } from "./translator.js";
 import type {
   ClaudeHookEventName,
@@ -40,6 +41,7 @@ export interface MapEventOptions {
 export function mapEvent(options: MapEventOptions): NotificationIntent {
   const { payload, event, translator, soundEnabled, projectDirOverride } = options;
 
+  const descriptor: EventDescriptor = EVENT_BY_NAME[event];
   const projectName = extractProjectName(payload.cwd, projectDirOverride);
   const prefix = projectName ? `${projectName}: ` : "";
 
@@ -53,6 +55,7 @@ export function mapEvent(options: MapEventOptions): NotificationIntent {
     projectName,
     sound: soundEnabled,
     soundName: built.sound,
+    scenario: descriptor.scenario,
   };
 }
 
@@ -70,38 +73,40 @@ interface BuildEventBodyOptions {
   prefix: string;
 }
 
+/**
+ * Builds title/body/severity/sound for an event, fully driven by its
+ * `EventDescriptor`. Title, severity and sound come straight from the
+ * registry; only the body varies, dispatched on `descriptor.resolver`.
+ * A descriptor with no resolver yields the plain `prefix + t(bodyKey)`.
+ */
 function buildEventBody(options: BuildEventBodyOptions): EventBody {
   const { event, payload, translator, prefix } = options;
+  const descriptor = EVENT_BY_NAME[event];
 
-  switch (event) {
-    case "Stop":
-      return {
-        title: translator.t("title.stop"),
-        body: `${prefix}${translator.t("body.stop")}`,
-        severity: "info",
-        sound: "Notification.IM",
-      };
-    case "Notification":
-      return {
-        title: translator.t("title.notification"),
-        body: `${prefix}${resolveNotificationBody(payload, translator)}`,
-        severity: "warning",
-        sound: "Notification.Default",
-      };
-    case "StopFailure":
-      return {
-        title: translator.t("title.stopFailure"),
-        body: `${prefix}${resolveStopFailureBody(payload, translator)}`,
-        severity: "error",
-        sound: "Notification.Looping.Alarm2",
-      };
-    case "SubagentStop":
-      return {
-        title: translator.t("title.subagentStop"),
-        body: `${prefix}${resolveSubagentBody(payload, translator)}`,
-        severity: "info",
-        sound: "Notification.IM",
-      };
+  return {
+    title: translator.t(descriptor.titleKey),
+    body: `${prefix}${resolveBody(descriptor, payload, translator)}`,
+    severity: descriptor.severity,
+    sound: descriptor.sound,
+  };
+}
+
+function resolveBody(
+  descriptor: EventDescriptor,
+  payload: ClaudeHookPayload,
+  translator: Translator,
+): string {
+  switch (descriptor.resolver) {
+    case "notification":
+      return resolveNotificationBody(payload, translator);
+    case "stopFailure":
+      return resolveStopFailureBody(payload, translator);
+    case "agentNamed":
+      return resolveAgentNamedBody(descriptor, payload, translator);
+    case "compact":
+      return resolveCompactBody(descriptor, payload, translator);
+    default:
+      return translator.t(descriptor.bodyKey);
   }
 }
 
@@ -155,12 +160,52 @@ function resolveStopFailureBody(payload: ClaudeHookPayload, translator: Translat
   return translator.t("body.stopFailure.fallback");
 }
 
-function resolveSubagentBody(payload: ClaudeHookPayload, translator: Translator): string {
+/**
+ * Body for "agent-aware" events (subagent start/stop, task created/completed):
+ * shows the agent name when `agent_type` is present, otherwise the plain
+ * fallback. The named variant lives at the descriptor's `<bodyKey>` sibling
+ * with the trailing segment swapped to `.named` — e.g. a `bodyKey` of
+ * `body.subagentStop.fallback` resolves the named key `body.subagentStop.named`.
+ */
+function resolveAgentNamedBody(
+  descriptor: EventDescriptor,
+  payload: ClaudeHookPayload,
+  translator: Translator,
+): string {
   const agent = payload.agent_type?.trim();
   if (agent && agent.length > 0) {
-    return translator.t("body.subagentStop.named", { agent });
+    return translator.t(namedKeyFor(descriptor.bodyKey), { agent });
   }
-  return translator.t("body.subagentStop.fallback");
+  return translator.t(descriptor.bodyKey);
+}
+
+/**
+ * Body for compaction events (`PreCompact`/`PostCompact`): picks the
+ * `manual`/`auto` variant from `payload.trigger`, falling back to the plain
+ * body when the trigger is missing or unrecognized. Variant keys are the
+ * descriptor's `<base>.manual` / `<base>.auto` siblings.
+ */
+function resolveCompactBody(
+  descriptor: EventDescriptor,
+  payload: ClaudeHookPayload,
+  translator: Translator,
+): string {
+  const trigger = payload.trigger?.trim().toLowerCase();
+  if (trigger === "manual" || trigger === "auto") {
+    const key = `${baseKeyFor(descriptor.bodyKey)}.${trigger}`;
+    if (translator.has(key)) return translator.t(key);
+  }
+  return translator.t(descriptor.bodyKey);
+}
+
+/** Maps a `*.fallback` body key to its `*.named` sibling (else appends `.named`). */
+function namedKeyFor(bodyKey: string): string {
+  return `${baseKeyFor(bodyKey)}.named`;
+}
+
+/** Strips a trailing `.fallback` segment to get the body key's base. */
+function baseKeyFor(bodyKey: string): string {
+  return bodyKey.endsWith(".fallback") ? bodyKey.slice(0, -".fallback".length) : bodyKey;
 }
 
 function extractProjectName(cwd?: string, override?: string): string | null {

@@ -1,6 +1,6 @@
 {
   "name": "ringly",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Ringly — native cross-platform notifications for Claude Code with i18n (pt-BR / en-US)",
   "type": "module",
   "license": "MIT",
@@ -55,7 +55,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ./scripts/gen-dispatch-data.mjs",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src test bin scripts plugin/hooks",

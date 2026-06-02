@@ -3,30 +3,106 @@ import { spawnSync as nodeSpawnSync, spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const requireFromHere = createRequire(import.meta.url);
+const here = dirname(fileURLToPath(import.meta.url));
 
-const ALLOWED_EVENTS = new Set([
-  "Notification",
-  "Stop",
-  "StopFailure",
-  "SubagentStop",
-  "SessionStart",
-]);
+/**
+ * Event metadata + embedded translations come from `dispatch.data.mjs`, which
+ * is generated from the TypeScript registry (`src/core/events.ts`) at build
+ * time and committed alongside this file. If that import ever fails, we fall
+ * back to an inline definition of the original four events so the hook never
+ * crashes — worst case is the pre-registry behavior, never an error.
+ */
+const FALLBACK_DATA = {
+  events: {
+    Notification: {
+      configKey: "notification",
+      defaultEnabled: true,
+      verbose: false,
+      sound: "Notification.Default",
+      resolver: "notification",
+      scenario: null,
+    },
+    Stop: {
+      configKey: "stop",
+      defaultEnabled: true,
+      verbose: false,
+      sound: "Notification.IM",
+      resolver: null,
+      scenario: null,
+    },
+    StopFailure: {
+      configKey: "stopFailure",
+      defaultEnabled: true,
+      verbose: false,
+      sound: "Notification.Looping.Alarm2",
+      resolver: "stopFailure",
+      scenario: null,
+    },
+    SubagentStop: {
+      configKey: "subagentStop",
+      defaultEnabled: false,
+      verbose: false,
+      sound: "Notification.IM",
+      resolver: "agentNamed",
+      scenario: null,
+    },
+  },
+  translations: {
+    "pt-BR": {
+      Notification: {
+        title: "Claude Code — Atenção necessária",
+        body: "Claude Code precisa da sua atenção",
+      },
+      Stop: { title: "Claude Code — Tarefa concluída", body: "Aguardando próximo input" },
+      StopFailure: {
+        title: "Claude Code — Erro de API",
+        body: "A sessão foi encerrada por um erro",
+      },
+      SubagentStop: { title: "Claude Code — Subagent finalizado", body: "Um subagent terminou" },
+    },
+    "en-US": {
+      Notification: {
+        title: "Claude Code — Attention required",
+        body: "Claude Code needs your attention",
+      },
+      Stop: { title: "Claude Code — Task complete", body: "Waiting for your next input" },
+      StopFailure: { title: "Claude Code — API error", body: "The session ended with an error" },
+      SubagentStop: { title: "Claude Code — Subagent finished", body: "A subagent finished" },
+    },
+  },
+};
+
+async function loadDispatchData() {
+  try {
+    const mod = await import(pathToFileURL(join(here, "dispatch.data.mjs")).href);
+    if (mod?.DISPATCH_DATA?.events && mod.DISPATCH_DATA.translations) return mod.DISPATCH_DATA;
+  } catch {
+    /* fall through to inline fallback */
+  }
+  return FALLBACK_DATA;
+}
+
+const DISPATCH_DATA = await loadDispatchData();
+
+// Notification events come from the data mirror; SessionStart (update check) is
+// always allowed and handled separately (it is not a notification event).
+const ALLOWED_EVENTS = new Set([...Object.keys(DISPATCH_DATA.events), "SessionStart"]);
 
 const SETTINGS_FILE = join(homedir(), ".claude", "settings.json");
 
-const DEFAULT_OPTIONS = {
-  language: "auto",
-  events_notification: true,
-  events_stop: true,
-  events_stopFailure: true,
-  events_subagentStop: false,
-  sound: true,
-  debug: false,
-  check_updates: true,
-};
+// Defaults derived from the registry: `events_<configKey>` per event +
+// the non-event options. Keeps this in lockstep with the TypeScript path.
+const DEFAULT_OPTIONS = (() => {
+  const opts = { language: "auto", sound: true, debug: false, check_updates: true };
+  for (const meta of Object.values(DISPATCH_DATA.events)) {
+    opts[`events_${meta.configKey}`] = meta.defaultEnabled;
+  }
+  return opts;
+})();
 
 function loadOptions() {
   try {
@@ -59,20 +135,16 @@ function debugLog(msg) {
 }
 
 function eventEnabled(event) {
-  switch (event) {
-    case "Notification":
-      return OPTIONS.events_notification !== false;
-    case "Stop":
-      return OPTIONS.events_stop !== false;
-    case "StopFailure":
-      return OPTIONS.events_stopFailure !== false;
-    case "SubagentStop":
-      return OPTIONS.events_subagentStop === true;
-    case "SessionStart":
-      return OPTIONS.check_updates !== false;
-    default:
-      return false;
-  }
+  // SessionStart is the update check, not a notification.
+  if (event === "SessionStart") return OPTIONS.check_updates !== false;
+
+  const meta = DISPATCH_DATA.events[event];
+  if (!meta) return false;
+
+  const value = OPTIONS[`events_${meta.configKey}`];
+  // Events on by default fire unless explicitly disabled; events off by default
+  // (incl. all verbose ones) fire only when explicitly enabled.
+  return meta.defaultEnabled ? value !== false : value === true;
 }
 
 async function readStdin() {
@@ -295,29 +367,6 @@ async function tryCliBinary(forcedEvent, rawStdin) {
   });
 }
 
-const EMBEDDED_TRANSLATIONS = {
-  "pt-BR": {
-    titleNotification: "Claude Code — Atenção necessária",
-    titleStop: "Claude Code — Tarefa concluída",
-    titleStopFailure: "Claude Code — Erro de API",
-    titleSubagent: "Claude Code — Subagent finalizado",
-    bodyStop: "Aguardando próximo input",
-    bodyNotification: "Claude Code precisa da sua atenção",
-    bodyStopFailure: "A sessão foi encerrada por um erro",
-    bodySubagent: "Um subagent terminou",
-  },
-  "en-US": {
-    titleNotification: "Claude Code — Attention required",
-    titleStop: "Claude Code — Task complete",
-    titleStopFailure: "Claude Code — API error",
-    titleSubagent: "Claude Code — Subagent finished",
-    bodyStop: "Waiting for your next input",
-    bodyNotification: "Claude Code needs your attention",
-    bodyStopFailure: "The session ended with an error",
-    bodySubagent: "A subagent finished",
-  },
-};
-
 function detectLanguage() {
   const fromSettings = OPTIONS.language;
   if (fromSettings === "pt-BR" || fromSettings === "en-US") return fromSettings;
@@ -378,44 +427,32 @@ function escapeXml(input) {
 
 function buildEmbeddedToast(event, payload) {
   const lang = detectLanguage();
-  const dict = EMBEDDED_TRANSLATIONS[lang];
+  const meta = DISPATCH_DATA.events[event];
+  const dict = DISPATCH_DATA.translations[lang] ?? DISPATCH_DATA.translations["en-US"];
+  const entry = dict?.[event] ?? { title: "Claude Code", body: "" };
 
-  let title = dict.titleStop;
-  let body = dict.bodyStop;
-  let sound = "Notification.IM";
+  const title = entry.title;
+  let body = entry.body;
+  const sound = meta?.sound ?? "Notification.IM";
 
-  switch (event) {
-    case "Notification":
-      title = dict.titleNotification;
-      body = payload?.message?.toString() || dict.bodyNotification;
-      sound = "Notification.Default";
-      break;
-    case "Stop":
-      title = dict.titleStop;
-      body = dict.bodyStop;
-      sound = "Notification.IM";
-      break;
-    case "StopFailure":
-      title = dict.titleStopFailure;
-      body =
-        payload?.error_type?.toString() || payload?.message?.toString() || dict.bodyStopFailure;
-      sound = "Notification.Looping.Alarm2";
-      break;
-    case "SubagentStop":
-      title = dict.titleSubagent;
-      body = payload?.agent_type
-        ? `${payload.agent_type}: ${dict.bodySubagent}`
-        : dict.bodySubagent;
-      sound = "Notification.IM";
-      break;
+  // The embedded path is intentionally simpler than the TypeScript resolvers;
+  // it just covers the common shapes so a toast still appears when the CLI
+  // module is unreachable.
+  if (event === "Notification") {
+    body = payload?.message?.toString() || entry.body;
+  } else if (event === "StopFailure") {
+    body = payload?.error_type?.toString() || payload?.message?.toString() || entry.body;
+  } else if (meta?.resolver === "agentNamed" && payload?.agent_type) {
+    body = `${payload.agent_type}: ${entry.body}`;
   }
 
   const project = extractProjectName(payload?.cwd);
   if (project) body = `${project}: ${body}`;
 
   const silent = OPTIONS.sound === false;
+  const scenario = meta?.scenario ?? null;
 
-  return { title: escapeXml(title), body: escapeXml(body), sound, silent };
+  return { title: escapeXml(title), body: escapeXml(body), sound, silent, scenario };
 }
 
 function extractProjectName(cwd) {
@@ -435,12 +472,14 @@ async function runEmbeddedToast(event, payload) {
     return;
   }
 
-  const { title, body, sound, silent } = buildEmbeddedToast(event, payload);
+  const { title, body, sound, silent, scenario } = buildEmbeddedToast(event, payload);
   const appId = "Claude.Code.CLI";
 
   const audioTag = silent ? '<audio silent="true"/>' : `<audio src="ms-winsoundevent:${sound}"/>`;
+  const scenarioAttr =
+    scenario && scenario !== "default" ? ` scenario="${escapeXml(scenario)}"` : "";
 
-  const toastXml = `<toast><visual><binding template="ToastGeneric"><text>${title}</text><text>${body}</text></binding></visual>${audioTag}</toast>`;
+  const toastXml = `<toast${scenarioAttr}><visual><binding template="ToastGeneric"><text>${title}</text><text>${body}</text></binding></visual>${audioTag}</toast>`;
 
   const script = `
 $ErrorActionPreference = 'SilentlyContinue'

@@ -9,18 +9,15 @@
  * reason — only `cli.ts` commands import it.
  */
 import { pluginOptionsToRinglyConfig, readRinglyPluginOptions } from "./claudeSettings.js";
+import { buildDefaultEvents, EVENTS, envSuffix } from "./events.js";
 import { logger } from "./logger.js";
 import { DEFAULT_APP_ID, type LanguageSetting, type RinglyConfig } from "./types.js";
 
 export const DEFAULT_CONFIG: RinglyConfig = {
   schemaVersion: 1,
   language: "auto",
-  events: {
-    notification: true,
-    stop: true,
-    stopFailure: true,
-    subagentStop: false,
-  },
+  // Derived from the registry — adding an event needs no change here.
+  events: buildDefaultEvents(),
   sound: true,
   debug: false,
   checkUpdates: true,
@@ -72,14 +69,11 @@ export function applyEnvOverrides(config: RinglyConfig): RinglyConfig {
     next.language = lang;
   }
 
-  const eventNotification = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_EVENTS_NOTIFICATION"]);
-  if (eventNotification !== null) next.events.notification = eventNotification;
-  const eventStop = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_EVENTS_STOP"]);
-  if (eventStop !== null) next.events.stop = eventStop;
-  const eventStopFailure = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_EVENTS_STOPFAILURE"]);
-  if (eventStopFailure !== null) next.events.stopFailure = eventStopFailure;
-  const eventSubagentStop = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_EVENTS_SUBAGENTSTOP"]);
-  if (eventSubagentStop !== null) next.events.subagentStop = eventSubagentStop;
+  // One `CLAUDE_PLUGIN_OPTION_EVENTS_<KEY>` override per registered event.
+  for (const e of EVENTS) {
+    const value = readBoolean(process.env[`CLAUDE_PLUGIN_OPTION_EVENTS_${envSuffix(e.configKey)}`]);
+    if (value !== null) next.events[e.configKey] = value;
+  }
 
   const sound = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_SOUND"]);
   if (sound !== null) next.sound = sound;

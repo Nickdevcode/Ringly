@@ -31,6 +31,7 @@ import {
   type RinglyPluginOptions,
   readClaudeSettings,
 } from "./claudeSettings.js";
+import { EVENTS, optionField } from "./events.js";
 import { logger } from "./logger.js";
 import type { RinglyConfig } from "./types.js";
 
@@ -117,16 +118,17 @@ export function writeRinglyPluginOptions(options: RinglyPluginOptions): SaveResu
 }
 
 export function ringlyConfigToPluginOptions(config: RinglyConfig): RinglyPluginOptions {
-  return {
+  const options: RinglyPluginOptions = {
     language: config.language,
-    events_notification: config.events.notification,
-    events_stop: config.events.stop,
-    events_stopFailure: config.events.stopFailure,
-    events_subagentStop: config.events.subagentStop,
     sound: config.sound,
     debug: config.debug,
     check_updates: config.checkUpdates,
   };
+  // One `events_<configKey>` field per registered event.
+  for (const e of EVENTS) {
+    options[optionField(e.configKey)] = config.events[e.configKey];
+  }
+  return options;
 }
 
 export function removeRinglyPluginOptions(): boolean {

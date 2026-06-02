@@ -1,16 +1,10 @@
 import { applyEnvOverrides, loadConfig } from "../core/config.js";
+import { ALLOWED_EVENT_NAMES } from "../core/events.js";
 import { logger } from "../core/logger.js";
 import { notify } from "../core/notifier.js";
 import { coerceClaudeHookPayload } from "../core/payloadGuards.js";
 import { readStdin, tryParseJson } from "../core/stdin.js";
 import type { ClaudeHookEventName, ClaudeHookPayload } from "../core/types.js";
-
-const ALLOWED_EVENTS: ReadonlySet<ClaudeHookEventName> = new Set([
-  "Notification",
-  "Stop",
-  "StopFailure",
-  "SubagentStop",
-]);
 
 export interface RunHookOptions {
   forcedEvent?: ClaudeHookEventName | undefined;
@@ -58,8 +52,8 @@ function pickEvent(
   forced: ClaudeHookEventName | undefined,
   payload: ClaudeHookPayload,
 ): ClaudeHookEventName | null {
-  if (forced && ALLOWED_EVENTS.has(forced)) return forced;
+  if (forced && ALLOWED_EVENT_NAMES.has(forced)) return forced;
   const fromPayload = payload.hook_event_name;
-  if (fromPayload && ALLOWED_EVENTS.has(fromPayload)) return fromPayload;
+  if (fromPayload && ALLOWED_EVENT_NAMES.has(fromPayload)) return fromPayload;
   return null;
 }

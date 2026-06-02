@@ -5,17 +5,17 @@ vi.mock("../src/core/notifier.js", () => ({
   notify: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/core/config.js", () => ({
-  loadConfig: vi.fn(() => ({
-    schemaVersion: 1,
-    language: "en-US",
-    events: { notification: true, stop: true, stopFailure: true, subagentStop: false },
-    sound: true,
-    debug: false,
-    appId: "Claude.Code.CLI",
-  })),
-  applyEnvOverrides: vi.fn((cfg) => cfg),
-}));
+vi.mock("../src/core/config.js", async () => {
+  // Derive from the real DEFAULT_CONFIG so the mock stays a complete, valid
+  // RinglyConfig as the registry grows (all event keys + checkUpdates present),
+  // overriding only the language for the assertions below.
+  const actual =
+    await vi.importActual<typeof import("../src/core/config.js")>("../src/core/config.js");
+  return {
+    loadConfig: vi.fn(() => ({ ...actual.DEFAULT_CONFIG, language: "en-US" })),
+    applyEnvOverrides: vi.fn((cfg) => cfg),
+  };
+});
 
 import { runHook } from "../src/commands/hook.js";
 import { applyEnvOverrides, loadConfig } from "../src/core/config.js";

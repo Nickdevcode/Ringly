@@ -1,6 +1,14 @@
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { EVENT_NAMES } from "./core/events.js";
 import { logger } from "./core/logger.js";
+import type { ClaudeHookEventName } from "./core/types.js";
+
+// Event choices for the CLI, derived from the registry so new events appear
+// automatically. The `hook` command also accepts `SessionStart` (the update
+// check), which is intentionally NOT a notification event.
+const TEST_EVENT_CHOICES: readonly string[] = EVENT_NAMES;
+const HOOK_EVENT_CHOICES: readonly string[] = [...EVENT_NAMES, "SessionStart"];
 
 /**
  * Returns true when the top-level argv requests help WITHOUT naming a
@@ -36,8 +44,8 @@ async function main(): Promise<void> {
         b
           .option("event", {
             type: "string",
-            choices: ["Notification", "Stop", "StopFailure", "SubagentStop"] as const,
-            default: "Stop" as const,
+            choices: TEST_EVENT_CHOICES,
+            default: "Stop",
             describe: "Event type to simulate",
           })
           .option("lang", {
@@ -52,7 +60,7 @@ async function main(): Promise<void> {
       async (argv) => {
         const mod = await import("./commands/test.js");
         await mod.runTest({
-          event: argv.event,
+          event: argv.event as ClaudeHookEventName,
           lang: argv.lang,
           title: argv.title,
           body: argv.body,
@@ -155,16 +163,10 @@ async function main(): Promise<void> {
       (b) =>
         b.positional("event", {
           type: "string",
-          choices: ["Notification", "Stop", "StopFailure", "SubagentStop", "SessionStart"] as const,
+          choices: HOOK_EVENT_CHOICES,
         }),
       async (argv) => {
-        const evt = argv["_"][1] as
-          | "Notification"
-          | "Stop"
-          | "StopFailure"
-          | "SubagentStop"
-          | "SessionStart"
-          | undefined;
+        const evt = argv["_"][1] as ClaudeHookEventName | "SessionStart" | undefined;
         if (evt === "SessionStart") {
           const mod = await import("./commands/updateCheckHook.js");
           await mod.runUpdateCheckHook();

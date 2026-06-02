@@ -9,14 +9,8 @@
  * stays best-effort, and we discard unknown fields entirely to avoid
  * accidentally surfacing them in toast text or logs.
  */
+import { ALLOWED_EVENT_NAMES } from "./events.js";
 import type { ClaudeHookEventName, ClaudeHookPayload } from "./types.js";
-
-const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
-  "Notification",
-  "Stop",
-  "StopFailure",
-  "SubagentStop",
-]);
 
 // 500 chars is enough for any human-readable error/message we render in a
 // toast body; 1024 covers realistic file paths even on deep WSL/macOS trees.
@@ -32,7 +26,7 @@ function coerceString(value: unknown, maxLength: number = MAX_STRING_LENGTH): st
 
 function coerceEvent(value: unknown): ClaudeHookEventName | undefined {
   if (typeof value !== "string") return undefined;
-  if (!ALLOWED_EVENTS.has(value)) return undefined;
+  if (!ALLOWED_EVENT_NAMES.has(value)) return undefined;
   return value as ClaudeHookEventName;
 }
 
@@ -71,6 +65,9 @@ export function coerceClaudeHookPayload(raw: unknown): ClaudeHookPayload {
 
   const transcriptPath = coerceString(obj.transcript_path, MAX_PATH_LENGTH);
   if (transcriptPath) result.transcript_path = transcriptPath;
+
+  const trigger = coerceString(obj.trigger);
+  if (trigger) result.trigger = trigger;
 
   return result;
 }

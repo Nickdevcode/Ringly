@@ -6,9 +6,9 @@
  * to react to. Everything is fail-silent: the SessionStart hook must
  * never delay or break the start of a Claude Code session.
  */
-import envPaths from "env-paths";
 import { buildDefaultChannels, dispatchToChannels } from "../channels/index.js";
 import { applyEnvOverrides, DEFAULT_CONFIG, loadConfig } from "../core/config.js";
+import { resolveDataDir } from "../core/dataDir.js";
 import { logger } from "../core/logger.js";
 import { readOwnVersion } from "../core/ownVersion.js";
 import { createTranslator } from "../core/translator.js";
@@ -84,6 +84,10 @@ export async function runUpdateCheckHook(): Promise<void> {
   }
 }
 
+// `resolveDataDir` now lives in `src/core/dataDir.ts` (shared with the event
+// throttle). It is imported directly here because this module is CLI-only
+// (dynamically imported by `cli.ts`) and never reaches the hook bundle.
+
 async function fireUpdateToast(
   config: RinglyConfig,
   currentVersion: string,
@@ -105,16 +109,4 @@ async function fireUpdateToast(
 
   const channels = buildDefaultChannels({ appId: config.appId });
   await dispatchToChannels(intent, channels);
-}
-
-/**
- * Resolves the directory where the throttle timestamp lives. Prefers
- * `${CLAUDE_PLUGIN_DATA}` (the persistent data dir Claude Code injects
- * for plugins — same convention the logger already uses) and falls
- * back to the env-paths default for standalone CLI usage.
- */
-function resolveDataDir(): string {
-  const pluginData = process.env["CLAUDE_PLUGIN_DATA"];
-  if (pluginData && pluginData.trim().length > 0) return pluginData;
-  return envPaths("ringly", { suffix: "" }).data;
 }

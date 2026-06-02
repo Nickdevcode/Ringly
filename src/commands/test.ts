@@ -19,7 +19,9 @@ export interface RunTestOptions {
   silent: boolean;
 }
 
-const SAMPLE_PAYLOADS: Record<ClaudeHookEventName, ClaudeHookPayload> = {
+// One sample payload per event. Typed with `satisfies` so adding an event to
+// the registry without a sample here is a compile error.
+const SAMPLE_PAYLOADS = {
   Notification: {
     hook_event_name: "Notification",
     message: "Claude needs your permission to use Bash",
@@ -36,7 +38,27 @@ const SAMPLE_PAYLOADS: Record<ClaudeHookEventName, ClaudeHookPayload> = {
     hook_event_name: "SubagentStop",
     agent_type: "gsd-executor",
   },
-};
+  SubagentStart: {
+    hook_event_name: "SubagentStart",
+    agent_type: "Explore",
+  },
+  TaskCreated: {
+    hook_event_name: "TaskCreated",
+    agent_type: "gsd-executor",
+  },
+  TaskCompleted: {
+    hook_event_name: "TaskCompleted",
+    agent_type: "gsd-executor",
+  },
+  PreCompact: {
+    hook_event_name: "PreCompact",
+    trigger: "auto",
+  },
+  PostCompact: {
+    hook_event_name: "PostCompact",
+    trigger: "manual",
+  },
+} satisfies Record<ClaudeHookEventName, ClaudeHookPayload>;
 
 export async function runTest(options: RunTestOptions): Promise<void> {
   const baseConfig = (() => {

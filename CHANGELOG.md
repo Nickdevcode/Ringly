@@ -5,6 +5,56 @@
 
 ---
 
+## [0.7.0] — 2026-06-02
+
+### 🇧🇷 Português
+
+**Adicionado**
+
+- **5 notificações novas, todas desligadas por padrão** (`src/core/events.ts`, `src/locales/*.json`). Agora dá pra ser avisado também quando um **subagent começa** (`SubagentStart`), quando uma **tarefa é criada ou concluída** (`TaskCreated` / `TaskCompleted`) e quando o Claude vai **compactar ou termina de compactar o contexto** (`PreCompact` / `PostCompact`). São eventos mais "verbosos" (acontecem muito numa sessão movimentada), então vêm **OFF por padrão** — você liga os que quiser pelo `ringly config`. Os textos saem traduzidos em pt-BR / en-US como o resto.
+- **Anti-spam (throttle + dedup) pros eventos verbosos** (`src/core/throttle.ts`). Quando você liga um evento verboso, o Ringly evita inundar a Central de Notificações: disparos repetidos do mesmo evento, no mesmo projeto e mesmo subagent, dentro de uma janela curta (~8s) são agrupados num só. Os 4 eventos clássicos (`Notification` / `Stop` / `StopFailure` / `SubagentStop`) **não** passam por isso e continuam exatamente como antes — nenhum custo no caminho quente.
+- **Toasts mais bonitos no Windows** (`src/platform/windows/toast.ts`, `src/platform/windows/icon.ts`, `src/channels/toast.ts`). O toast agora carrega **timestamp**, **agrupamento por projeto** (vira um cabeçalho na Central de Notificações) e suporta um **ícone do app** (`appLogoOverride`, recortado em círculo) — basta soltar um `plugin/assets/ringly.png`. Se o ícone não existir, a notificação aparece normalmente sem ele (nada quebra). Eventos de compactação usam `scenario="reminder"`, então ficam fixos na tela até você dispensar.
+
+**Mudado**
+
+- **Refatoração grande: eventos agora são data-driven** (`src/core/events.ts` + ~16 arquivos que passaram a derivar dele). Antes, adicionar uma notificação nova exigia editar dezenas de lugares acoplados (tipos, switches, Sets, objetos de config, a TUI, o `dispatch.mjs`...). Agora existe **um único registro de eventos** (`src/core/events.ts`) e tudo o resto é derivado: o tipo do evento, os defaults, a leitura/escrita do `settings.json`, o mapeamento evento→notificação, a lista de permissões, as linhas da TUI e os exemplos de teste. **Adicionar uma notificação nova virou mudar 1 lugar** + as traduções. Comportamento externo idêntico — provado pelos testes.
+- **`hooks.json` e o fallback do plugin agora são gerados a partir do registro** (`scripts/gen-dispatch-data.mjs`, `plugin/hooks/dispatch.data.mjs`, `plugin/hooks/hooks.json`). O `dispatch.mjs` (o fallback embutido em JS puro, que roda quando a CLI não está acessível) não duplica mais a lista de eventos à mão: ele lê uma tabela de dados **gerada no build** a partir do `src/core/events.ts`, com um fallback inline dos 4 eventos clássicos caso o arquivo gerado suma. Tem checagem no CI pra garantir que o gerado nunca fica desatualizado.
+
+**Testes**
+
+- **+41 testes novos** (de 163 para 204). `test/events.test.ts` cobre as invariantes do registro de eventos e **paridade dos dois idiomas** (pt-BR e en-US têm exatamente as mesmas chaves — trava regressão de tradução). `test/throttle.test.ts` cobre o anti-spam (janela, dedup por chave, fail-open, poda de entradas antigas, escrita atômica). `test/toast.test.ts` cobre o toast rico (ícone presente/ausente, header, scenario, timestamp, escaping) e a resolução graciosa do ícone. `test/eventMapper.test.ts` ganhou casos pros 5 eventos novos.
+
+**Notas pra quem tá vindo da v0.6.0**
+
+- **Nada quebra.** Seu `~/.claude/settings.json` atual continua válido: os eventos antigos (`events_notification`, `events_stop`, etc.) seguem sendo lidos, e os 5 novos caem em OFF por padrão. Os 4 eventos clássicos disparam exatamente como antes.
+- O bundle do hook (`dist/hook.js`) cresceu ~6 KB — quase tudo é a tradução dos 5 eventos novos (os locales inteiros viajam no bundle), mais o módulo de throttle. Nenhuma dependência pesada nova entrou no caminho quente.
+- Pra ativar os eventos novos, rode `ringly config` e marque os que quiser. Pra ver o ícone no toast, coloque um `ringly.png` quadrado em `plugin/assets/`.
+
+### 🇺🇸 English
+
+**Added**
+
+- **5 new notifications, all off by default** (`src/core/events.ts`, `src/locales/*.json`). You can now also be notified when a **subagent starts** (`SubagentStart`), when a **task is created or completed** (`TaskCreated` / `TaskCompleted`), and when Claude is **about to compact or has finished compacting the context** (`PreCompact` / `PostCompact`). These are "verbose" events (they fire a lot in a busy session), so they ship **OFF by default** — turn on the ones you want via `ringly config`. The text is translated in pt-BR / en-US like everything else.
+- **Anti-spam (throttle + dedup) for verbose events** (`src/core/throttle.ts`). When you enable a verbose event, Ringly avoids flooding the Action Center: repeated fires of the same event, in the same project and same subagent, within a short window (~8s) collapse into one. The four classic events (`Notification` / `Stop` / `StopFailure` / `SubagentStop`) **don't** go through this and behave exactly as before — zero cost on the hot path.
+- **Richer Windows toasts** (`src/platform/windows/toast.ts`, `src/platform/windows/icon.ts`, `src/channels/toast.ts`). The toast now carries a **timestamp**, **per-project grouping** (an Action Center header) and supports an **app icon** (`appLogoOverride`, circle-cropped) — just drop a `plugin/assets/ringly.png`. If the icon isn't there, the notification still shows fine without it (nothing breaks). Compaction events use `scenario="reminder"`, so they stay on screen until dismissed.
+
+**Changed**
+
+- **Big refactor: events are now data-driven** (`src/core/events.ts` + ~16 files that derive from it). Previously, adding a new notification meant editing dozens of coupled spots (types, switches, Sets, config objects, the TUI, `dispatch.mjs`...). Now there's a **single event registry** (`src/core/events.ts`) and everything else is derived: the event type, the defaults, reading/writing `settings.json`, the event→notification mapping, the allow-lists, the TUI rows, and the test samples. **Adding a new notification is now a one-place change** plus translations. External behavior is identical — proven by the tests.
+- **`hooks.json` and the plugin fallback are now generated from the registry** (`scripts/gen-dispatch-data.mjs`, `plugin/hooks/dispatch.data.mjs`, `plugin/hooks/hooks.json`). `dispatch.mjs` (the pure-JS embedded fallback that runs when the CLI is unreachable) no longer hand-duplicates the event list: it reads a **build-generated** data table derived from `src/core/events.ts`, with an inline fallback of the four classic events if the generated file ever goes missing. CI has a check so the generated files can never drift.
+
+**Tests**
+
+- **+41 new tests** (from 163 to 204). `test/events.test.ts` covers the event-registry invariants and **locale parity** (pt-BR and en-US have the exact same keys — locks out translation drift). `test/throttle.test.ts` covers the anti-spam (window, per-key dedup, fail-open, stale-entry pruning, atomic write). `test/toast.test.ts` covers the rich toast (icon present/absent, header, scenario, timestamp, escaping) and graceful icon resolution. `test/eventMapper.test.ts` gained cases for the 5 new events.
+
+**Notes for v0.6.0 users**
+
+- **Nothing breaks.** Your existing `~/.claude/settings.json` stays valid: the old events (`events_notification`, `events_stop`, etc.) are still read, and the 5 new ones default to OFF. The four classic events fire exactly as before.
+- The hook bundle (`dist/hook.js`) grew ~6 KB — almost all of it is the translations for the 5 new events (the full locales travel in the bundle), plus the throttle module. No new heavy dependency entered the hot path.
+- To enable the new events, run `ringly config` and check the ones you want. To see the icon on the toast, drop a square `ringly.png` into `plugin/assets/`.
+
+---
+
 ## [0.6.0] — 2026-05-26
 
 ### 🇧🇷 Português

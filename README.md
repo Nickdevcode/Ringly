@@ -13,10 +13,15 @@
 
 ## Português 🇧🇷
 
-O **Ringly** liga os hooks do Claude Code (`Notification`, `Stop`, `StopFailure`, `SubagentStop`)
-a notificações nativas do sistema operacional, com mensagens traduzidas e contextualizadas
-pelo nome do projeto. Você nunca mais precisa ficar olhando o terminal pra saber o que o
-Claude está esperando de você.
+O **Ringly** liga os hooks do Claude Code a notificações nativas do sistema operacional, com
+mensagens traduzidas e contextualizadas pelo nome do projeto. Você nunca mais precisa ficar
+olhando o terminal pra saber o que o Claude está esperando de você.
+
+Por padrão ele cobre os eventos essenciais (`Notification`, `Stop`, `StopFailure` e,
+opcionalmente, `SubagentStop`). A partir da v0.7.0 dá pra ligar também eventos mais granulares —
+início de subagent (`SubagentStart`), criação/conclusão de tarefas (`TaskCreated`/`TaskCompleted`)
+e compactação de contexto (`PreCompact`/`PostCompact`) — todos desligados por padrão e
+throttled pra não te encher de notificação.
 
 O projeto é distribuído em **duas camadas complementares e obrigatórias**,
 nesta ordem:
@@ -172,16 +177,27 @@ O dispatcher dos hooks lê, **nesta ordem de prioridade**:
 
 As chaves abaixo ficam em `pluginConfigs.ringly.options` dentro de `~/.claude/settings.json`. O `ringly config` cria/edita todas elas pra você.
 
-| Chave                 | Tipo                  | Padrão | Descrição                                             |
-| --------------------- | --------------------- | :----: | ----------------------------------------------------- |
-| `language`            | `auto / pt-BR / en-US`| `auto` | `auto` detecta pelo locale do sistema.                |
-| `events_notification` | boolean               |  true  | Notifica quando o Claude pede permissão ou input.     |
-| `events_stop`         | boolean               |  true  | Notifica quando o Claude termina uma resposta.        |
-| `events_stopFailure`  | boolean               |  true  | Notifica quando um erro de API encerra a sessão.      |
-| `events_subagentStop` | boolean               | false  | Notifica quando um subagent termina.                  |
-| `sound`               | boolean               |  true  | Toca som junto da notificação.                        |
-| `debug`               | boolean               | false  | Escreve logs detalhados.                              |
-| `check_updates`       | boolean               |  true  | Checa o npm 1x/dia no SessionStart e avisa via toast quando tem versão nova. |
+| Chave                  | Tipo                  | Padrão | Descrição                                             |
+| ---------------------- | --------------------- | :----: | ----------------------------------------------------- |
+| `language`             | `auto / pt-BR / en-US`| `auto` | `auto` detecta pelo locale do sistema.                |
+| `events_notification`  | boolean               |  true  | Notifica quando o Claude pede permissão ou input.     |
+| `events_stop`          | boolean               |  true  | Notifica quando o Claude termina uma resposta.        |
+| `events_stopFailure`   | boolean               |  true  | Notifica quando um erro de API encerra a sessão.      |
+| `events_subagentStop`  | boolean               | false  | Notifica quando um subagent termina.                  |
+| `events_subagentStart` | boolean               | false  | Notifica quando um subagent **começa**. Verboso (throttled). |
+| `events_taskCreated`   | boolean               | false  | Notifica quando uma tarefa é criada. Verboso (throttled). |
+| `events_taskCompleted` | boolean               | false  | Notifica quando uma tarefa é concluída. Verboso (throttled). |
+| `events_preCompact`    | boolean               | false  | Notifica **antes** do contexto ser compactado. Verboso (throttled). |
+| `events_postCompact`   | boolean               | false  | Notifica **depois** do contexto ser compactado. Verboso (throttled). |
+| `sound`                | boolean               |  true  | Toca som junto da notificação.                        |
+| `debug`                | boolean               | false  | Escreve logs detalhados.                              |
+| `check_updates`        | boolean               |  true  | Checa o npm 1x/dia no SessionStart e avisa via toast quando tem versão nova. |
+
+> **Eventos verbosos** (subagent start, tarefas, compactação) vêm **desligados por padrão** e são
+> **throttled/deduplicados**: numa sessão movimentada, o Ringly agrupa disparos repetidos (mesmo
+> evento + projeto + subagent dentro de uma janela curta) pra não inundar a Central de Notificações.
+> Ligue os que quiser pelo `ringly config`. **Adicionar uma notificação nova ao Ringly hoje é mudar
+> 1 lugar** (o registro de eventos em `src/core/events.ts`) + as traduções — o resto é derivado.
 
 ### Comandos da CLI
 
@@ -210,8 +226,11 @@ ringly uninstall               # remove AUMID, atalho e configurações do Ringl
 
 ### Como funciona
 
-1. O Claude Code emite um evento de hook (`SessionStart`, `Notification`, `Stop`, `StopFailure`, `SubagentStop`).
+1. O Claude Code emite um evento de hook (`SessionStart`, `Notification`, `Stop`, `StopFailure`,
+   `SubagentStop`, `SubagentStart`, `TaskCreated`, `TaskCompleted`, `PreCompact`, `PostCompact`).
 2. O `hooks.json` do plugin executa `node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs <Event>`.
+   Esse `hooks.json` e a tabela de eventos embutida no fallback (`dispatch.data.mjs`) são
+   **gerados** a partir do registro único de eventos (`src/core/events.ts`) no `npm run build`.
 3. O `dispatch.mjs` lê o `~/.claude/settings.json` e checa as opções do Ringly. Se o evento
    estiver desabilitado pelo usuário (`events_*` ou `check_updates`), o dispatcher encerra
    silenciosamente — sem disparar nada. O `SessionStart` é tratado como um caminho separado:
@@ -227,8 +246,11 @@ ringly uninstall               # remove AUMID, atalho e configurações do Ringl
      registrado pelo `ringly init`, esse fallback **não substitui o passo 1**:
      sem CLI, ele toca no máximo um beep e sai.
 5. No Windows, o toast é gerado como XML e exibido via o AUMID registrado
-   `Claude.Code.CLI`. Um beep é tocado como fallback se o Modo Foco ou Não Perturbe
-   estiverem bloqueando as notificações.
+   `Claude.Code.CLI`. O XML inclui **timestamp**, **agrupamento por projeto** (header da Central
+   de Notificações) e, quando houver um `plugin/assets/ringly.png`, o **ícone do app**
+   (`appLogoOverride`, recortado em círculo). Eventos de compactação usam `scenario="reminder"`
+   (ficam fixos na tela até você dispensar). Um beep é tocado como fallback se o Modo Foco ou
+   Não Perturbe estiverem bloqueando as notificações.
 
 ### Solução de problemas
 
@@ -253,9 +275,14 @@ Repositório: [github.com/nickdevcode/Ringly](https://github.com/nickdevcode/Rin
 
 ## English 🇺🇸
 
-**Ringly** wires up the Claude Code hook system (`Notification`, `Stop`, `StopFailure`,
-`SubagentStop`) to native operating-system notifications, with translated, project-aware
-messages so you always know what Claude needs from you without staring at your terminal.
+**Ringly** wires up the Claude Code hook system to native operating-system notifications, with
+translated, project-aware messages so you always know what Claude needs from you without staring
+at your terminal.
+
+Out of the box it covers the essential events (`Notification`, `Stop`, `StopFailure`, and
+optionally `SubagentStop`). As of v0.7.0 you can also opt into finer-grained ones — subagent start
+(`SubagentStart`), task created/completed (`TaskCreated`/`TaskCompleted`), and context compaction
+(`PreCompact`/`PostCompact`) — all off by default and throttled so they never flood you.
 
 It is distributed as **two complementary layers, both required**, in this order:
 
@@ -422,16 +449,27 @@ The hook dispatcher reads, **in this priority order**:
 
 The keys below live in `pluginConfigs.ringly.options` inside `~/.claude/settings.json`. `ringly config` creates/edits all of them for you.
 
-| Key                   | Type                   | Default | Description                                              |
-| --------------------- | ---------------------- | :-----: | -------------------------------------------------------- |
-| `language`            | `auto / pt-BR / en-US` | `auto`  | Auto-detects from system locale when set to `auto`.      |
-| `events_notification` | boolean                |  true   | Notify when Claude requests permission or input.         |
-| `events_stop`         | boolean                |  true   | Notify when Claude finishes a response.                  |
-| `events_stopFailure`  | boolean                |  true   | Notify when an API error ends the session.               |
-| `events_subagentStop` | boolean                |  false  | Notify when a subagent finishes.                         |
-| `sound`               | boolean                |  true   | Play a sound with each notification.                     |
-| `debug`               | boolean                |  false  | Write detailed logs.                                     |
-| `check_updates`       | boolean                |  true   | Check npm once a day at session start and notify via toast when a new version ships. |
+| Key                    | Type                   | Default | Description                                              |
+| ---------------------- | ---------------------- | :-----: | -------------------------------------------------------- |
+| `language`             | `auto / pt-BR / en-US` | `auto`  | Auto-detects from system locale when set to `auto`.      |
+| `events_notification`  | boolean                |  true   | Notify when Claude requests permission or input.         |
+| `events_stop`          | boolean                |  true   | Notify when Claude finishes a response.                  |
+| `events_stopFailure`   | boolean                |  true   | Notify when an API error ends the session.               |
+| `events_subagentStop`  | boolean                |  false  | Notify when a subagent finishes.                         |
+| `events_subagentStart` | boolean                |  false  | Notify when a subagent **starts**. Verbose (throttled).  |
+| `events_taskCreated`   | boolean                |  false  | Notify when a task is created. Verbose (throttled).      |
+| `events_taskCompleted` | boolean                |  false  | Notify when a task is completed. Verbose (throttled).    |
+| `events_preCompact`    | boolean                |  false  | Notify **before** the context is compacted. Verbose (throttled). |
+| `events_postCompact`   | boolean                |  false  | Notify **after** the context is compacted. Verbose (throttled). |
+| `sound`                | boolean                |  true   | Play a sound with each notification.                     |
+| `debug`                | boolean                |  false  | Write detailed logs.                                     |
+| `check_updates`        | boolean                |  true   | Check npm once a day at session start and notify via toast when a new version ships. |
+
+> **Verbose events** (subagent start, tasks, compaction) ship **off by default** and are
+> **throttled/deduped**: in a busy session Ringly collapses repeated fires (same event + project +
+> subagent within a short window) so they can't flood the Action Center. Turn on the ones you want
+> via `ringly config`. **Adding a new notification to Ringly is now a one-place change** (the event
+> registry in `src/core/events.ts`) plus its translations — everything else is derived.
 
 ### CLI commands
 
@@ -460,8 +498,11 @@ ringly uninstall               # remove AUMID, shortcut, and Ringly settings
 
 ### How it works
 
-1. Claude Code emits a hook event (`SessionStart`, `Notification`, `Stop`, `StopFailure`, `SubagentStop`).
-2. The plugin's `hooks.json` runs `node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs <Event>`.
+1. Claude Code emits a hook event (`SessionStart`, `Notification`, `Stop`, `StopFailure`,
+   `SubagentStop`, `SubagentStart`, `TaskCreated`, `TaskCompleted`, `PreCompact`, `PostCompact`).
+2. The plugin's `hooks.json` runs `node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs <Event>`. That
+   `hooks.json` and the fallback's embedded event table (`dispatch.data.mjs`) are **generated**
+   from the single event registry (`src/core/events.ts`) at `npm run build`.
 3. `dispatch.mjs` reads `~/.claude/settings.json` and checks your Ringly options. If the event
    is disabled (`events_*` or `check_updates`), the dispatcher exits silently — nothing is
    fired. `SessionStart` follows its own path: instead of becoming a toast directly, it
@@ -478,8 +519,11 @@ ringly uninstall               # remove AUMID, shortcut, and Ringly settings
      registered by `ringly init`, this fallback **does not replace step 1**:
      without the CLI it plays a beep at best and exits.
 5. On Windows, the toast is generated as XML and shown via the registered
-   AUMID `Claude.Code.CLI`. A beep is played as a fallback if Focus Assist or
-   Do Not Disturb is blocking notifications.
+   AUMID `Claude.Code.CLI`. The XML carries a **timestamp**, **per-project grouping** (an Action
+   Center header) and, when a `plugin/assets/ringly.png` exists, the **app icon**
+   (`appLogoOverride`, circle-cropped). Compaction events use `scenario="reminder"` (they stay
+   on screen until dismissed). A beep is played as a fallback if Focus Assist or Do Not Disturb
+   is blocking notifications.
 
 ### Troubleshooting
 

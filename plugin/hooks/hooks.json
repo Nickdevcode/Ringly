@@ -6,7 +6,10 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs", "SessionStart"]
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs",
+              "SessionStart"
+            ]
           }
         ]
       }
@@ -17,7 +20,10 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs", "Notification"]
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs",
+              "Notification"
+            ]
           }
         ]
       }
@@ -28,7 +34,10 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs", "Stop"]
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs",
+              "Stop"
+            ]
           }
         ]
       }
@@ -39,7 +48,10 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs", "StopFailure"]
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs",
+              "StopFailure"
+            ]
           }
         ]
       }
@@ -50,7 +62,80 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs", "SubagentStop"]
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs",
+              "SubagentStop"
+            ]
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs",
+              "SubagentStart"
+            ]
+          }
+        ]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs",
+              "TaskCreated"
+            ]
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs",
+              "TaskCompleted"
+            ]
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs",
+              "PreCompact"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.mjs",
+              "PostCompact"
+            ]
           }
         ]
       }

@@ -1,0 +1,6 @@
+{
+  "hook_event_name": "SubagentStart",
+  "cwd": "C:/dev/NewsDev",
+  "agent_type": "Explore",
+  "agent_id": "agent-abc123"
+}

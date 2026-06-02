@@ -1,17 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const dispatchSpy = vi.fn().mockResolvedValue(undefined);
+vi.mock("../src/channels/index.js", () => ({
+  buildDefaultChannels: vi.fn(() => []),
+  dispatchToChannels: (...args: unknown[]) => dispatchSpy(...args),
+}));
+
 import { DEFAULT_CONFIG } from "../src/core/config.js";
-import { buildIntent, isEventEnabled } from "../src/core/notifier.js";
+import { buildIntent, isEventEnabled, notify } from "../src/core/notifier.js";
 import type { ClaudeHookPayload, RinglyConfig } from "../src/core/types.js";
 
 describe("isEventEnabled", () => {
   const baseConfig: RinglyConfig = {
     ...DEFAULT_CONFIG,
-    events: {
-      notification: true,
-      stop: false,
-      stopFailure: true,
-      subagentStop: false,
-    },
+    events: { ...DEFAULT_CONFIG.events, notification: true, stop: false, stopFailure: true },
   };
 
   it("returns config flag for Notification event", () => {
@@ -76,5 +81,62 @@ describe("buildIntent", () => {
       config: { ...config, sound: false },
     });
     expect(intent.sound).toBe(false);
+  });
+});
+
+describe("notify", () => {
+  let dataDir: string;
+  const originalDataDir = process.env["CLAUDE_PLUGIN_DATA"];
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), "ringly-notify-"));
+    process.env["CLAUDE_PLUGIN_DATA"] = dataDir;
+    dispatchSpy.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+    if (originalDataDir === undefined) delete process.env["CLAUDE_PLUGIN_DATA"];
+    else process.env["CLAUDE_PLUGIN_DATA"] = originalDataDir;
+  });
+
+  it("skips dispatch when the event is disabled", async () => {
+    // SubagentStop is off by default.
+    await notify({ event: "SubagentStop", payload: {}, config: DEFAULT_CONFIG });
+    expect(dispatchSpy).not.toHaveBeenCalled();
+  });
+
+  it("dispatches a non-verbose enabled event without touching the throttle", async () => {
+    await notify({ event: "Stop", payload: { cwd: "/x/App" }, config: DEFAULT_CONFIG });
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("throttles a verbose event: first fires, immediate repeat is suppressed", async () => {
+    const config: RinglyConfig = {
+      ...DEFAULT_CONFIG,
+      events: { ...DEFAULT_CONFIG.events, subagentStart: true },
+    };
+    const payload: ClaudeHookPayload = { cwd: "/x/App", agent_type: "Explore" };
+    await notify({ event: "SubagentStart", payload, config });
+    await notify({ event: "SubagentStart", payload, config });
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not throttle distinct subagents of the same verbose event", async () => {
+    const config: RinglyConfig = {
+      ...DEFAULT_CONFIG,
+      events: { ...DEFAULT_CONFIG.events, subagentStart: true },
+    };
+    await notify({
+      event: "SubagentStart",
+      payload: { cwd: "/x/App", agent_type: "Explore" },
+      config,
+    });
+    await notify({
+      event: "SubagentStart",
+      payload: { cwd: "/x/App", agent_type: "Plan" },
+      config,
+    });
+    expect(dispatchSpy).toHaveBeenCalledTimes(2);
   });
 });

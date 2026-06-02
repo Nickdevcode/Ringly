@@ -97,6 +97,67 @@ describe("eventMapper - SubagentStop event", () => {
   });
 });
 
+describe("eventMapper - SubagentStart event (agentNamed)", () => {
+  it("uses agent_type when provided", () => {
+    const intent = runMap(
+      { hook_event_name: "SubagentStart", cwd: "C:/foo/NewsDev", agent_type: "Explore" },
+      "SubagentStart",
+    );
+    expect(intent.title).toContain("Subagent iniciado");
+    expect(intent.body).toContain("Explore");
+    expect(intent.body).toContain("começou");
+  });
+
+  it("falls back to generic body when agent_type missing", () => {
+    const intent = runMap({ hook_event_name: "SubagentStart", cwd: "C:/foo/bar" }, "SubagentStart");
+    expect(intent.body).toContain("Um subagent começou");
+  });
+});
+
+describe("eventMapper - Task events (agentNamed)", () => {
+  it("TaskCreated shows the agent name", () => {
+    const intent = runMap(
+      { hook_event_name: "TaskCreated", cwd: "C:/foo/bar", agent_type: "gsd-executor" },
+      "TaskCreated",
+    );
+    expect(intent.title).toContain("Tarefa criada");
+    expect(intent.body).toContain("gsd-executor");
+  });
+
+  it("TaskCompleted falls back when agent_type missing", () => {
+    const intent = runMap({ hook_event_name: "TaskCompleted", cwd: "C:/foo/bar" }, "TaskCompleted");
+    expect(intent.body).toContain("Uma tarefa foi concluída");
+  });
+});
+
+describe("eventMapper - compaction events (compact)", () => {
+  it("PreCompact picks the auto-trigger variant", () => {
+    const intent = runMap(
+      { hook_event_name: "PreCompact", cwd: "C:/foo/bar", trigger: "auto" },
+      "PreCompact",
+    );
+    expect(intent.title).toContain("Compactando contexto");
+    expect(intent.body).toContain("automaticamente");
+    expect(intent.soundName).toBe("Notification.Reminder");
+  });
+
+  it("PreCompact picks the manual-trigger variant", () => {
+    const intent = runMap(
+      { hook_event_name: "PreCompact", cwd: "C:/foo/bar", trigger: "manual" },
+      "PreCompact",
+    );
+    expect(intent.body).toContain("solicitado por você");
+  });
+
+  it("PostCompact falls back when trigger is missing or unknown", () => {
+    const intent = runMap(
+      { hook_event_name: "PostCompact", cwd: "C:/foo/bar", trigger: "weird" },
+      "PostCompact",
+    );
+    expect(intent.body).toContain("foi compactado");
+  });
+});
+
 describe("eventMapper - project name extraction", () => {
   it("extracts the project name from cwd", () => {
     const intent = runMap({ hook_event_name: "Stop", cwd: "C:/projects/awesome-project" }, "Stop");

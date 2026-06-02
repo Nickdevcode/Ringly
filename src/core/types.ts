@@ -4,7 +4,15 @@ export type SupportedLanguage = "pt-BR" | "en-US";
 
 export type LanguageSetting = SupportedLanguage | "auto";
 
-export type ClaudeHookEventName = "Notification" | "Stop" | "StopFailure" | "SubagentStop";
+// The notification event union and config keys are derived from the event
+// registry (`events.ts`) so that adding an event is a one-place change.
+// Imported for local use here and re-exported because most modules import
+// `ClaudeHookEventName` from `types.js`. This is a types-only cycle
+// (`types` ↔ `events`); both sides are erased at runtime, so `dist/*.js` has
+// no circular `import`.
+import type { ClaudeHookEventName, EventConfigKey } from "./events.js";
+
+export type { ClaudeHookEventName };
 
 export type NotificationSeverity = "info" | "warning" | "error";
 
@@ -19,6 +27,8 @@ export interface ClaudeHookPayload {
   error?: string;
   session_id?: string;
   transcript_path?: string;
+  /** PreCompact/PostCompact: what triggered compaction (`manual` | `auto`). */
+  trigger?: string;
 }
 
 export interface NotificationIntent {
@@ -29,6 +39,8 @@ export interface NotificationIntent {
   projectName: string | null;
   sound: boolean;
   soundName: ToastSoundName;
+  /** Windows toast scenario derived from the event descriptor (optional). */
+  scenario?: ToastScenario | undefined;
 }
 
 export type ToastSoundName =
@@ -42,22 +54,28 @@ export type ToastSoundName =
   | "Notification.Looping.Call"
   | "silent";
 
+export type ToastScenario = "default" | "reminder" | "alarm";
+
 export interface ToastOptions {
   appId: string;
   title: string;
   body: string;
   sound: ToastSoundName;
+  /** Absolute path to the app logo (appLogoOverride). Omitted/missing → no image. */
+  iconPath?: string | undefined;
+  /** Windows toast scenario. `default` is treated as "no scenario attribute". */
+  scenario?: ToastScenario | undefined;
+  /** ISO 8601 timestamp shown on the toast (overrides the OS receipt time). */
+  displayTimestamp?: string | undefined;
 }
 
 export interface RinglyConfig {
   schemaVersion: 1;
   language: LanguageSetting;
-  events: {
-    notification: boolean;
-    stop: boolean;
-    stopFailure: boolean;
-    subagentStop: boolean;
-  };
+  // Keyed by the registry's `configKey`s (a closed literal union, so typos
+  // are still compile errors) — the key set follows `events.ts`, not a
+  // hand-written object, so a new event needs no change here.
+  events: Record<EventConfigKey, boolean>;
   sound: boolean;
   debug: boolean;
   checkUpdates: boolean;

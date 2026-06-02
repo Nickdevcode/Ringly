@@ -1,15 +1,13 @@
 import { Box, Text, useInput } from "ink";
 import { type FC, useState } from "react";
+import { EVENTS, type EventConfigKey } from "../../core/events.js";
 import type { Translator } from "../../core/translator.js";
+import type { RinglyConfig } from "../../core/types.js";
 import { Footer } from "../components/Footer.js";
 import { Header } from "../components/Header.js";
 
-export interface EventToggles {
-  notification: boolean;
-  stop: boolean;
-  stopFailure: boolean;
-  subagentStop: boolean;
-}
+/** The TUI toggle map mirrors `RinglyConfig.events` (registry-derived keys). */
+export type EventToggles = RinglyConfig["events"];
 
 export interface HookPickerProps {
   translator: Translator;
@@ -18,38 +16,20 @@ export interface HookPickerProps {
 }
 
 interface Item {
-  key: keyof EventToggles;
+  key: EventConfigKey;
   icon: string;
   labelKey: string;
   descKey: string;
 }
 
-const ITEMS: readonly Item[] = [
-  {
-    key: "notification",
-    icon: "🔔",
-    labelKey: "tui.events.notification.label",
-    descKey: "tui.events.notification.desc",
-  },
-  {
-    key: "stop",
-    icon: "✅",
-    labelKey: "tui.events.stop.label",
-    descKey: "tui.events.stop.desc",
-  },
-  {
-    key: "stopFailure",
-    icon: "⚠️ ",
-    labelKey: "tui.events.stopFailure.label",
-    descKey: "tui.events.stopFailure.desc",
-  },
-  {
-    key: "subagentStop",
-    icon: "🤖",
-    labelKey: "tui.events.subagentStop.label",
-    descKey: "tui.events.subagentStop.desc",
-  },
-];
+// Rows are derived from the registry, so a new event shows up here
+// automatically (label/description keys follow `tui.events.<configKey>.*`).
+const ITEMS: readonly Item[] = EVENTS.map((e) => ({
+  key: e.configKey,
+  icon: e.icon,
+  labelKey: `tui.events.${e.configKey}.label`,
+  descKey: `tui.events.${e.configKey}.desc`,
+}));
 
 export const HookPicker: FC<HookPickerProps> = ({ translator, initial, onSubmit }) => {
   const [toggles, setToggles] = useState<EventToggles>(initial);

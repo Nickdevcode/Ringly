@@ -69,6 +69,16 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Generated dispatch data is up to date
+        shell: bash
+        run: |
+          # `npm run build` regenerates plugin/hooks/dispatch.data.mjs and
+          # hooks.json from the event registry. If the committed copies drift
+          # from a fresh build, fail — the registry is the single source of
+          # truth and the generated files must be committed in sync.
+          git diff --exit-code -- plugin/hooks/dispatch.data.mjs plugin/hooks/hooks.json \
+            || (echo "::error::Generated dispatch files are stale. Run 'npm run build' and commit the result." && exit 1)
+
       - name: Smoke check bundle entries
         shell: bash
         run: |
