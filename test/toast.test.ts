@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ToastOptions } from "../src/core/types.js";
 import { resetIconPathCache, resolveIconPath } from "../src/platform/windows/icon.js";
@@ -12,6 +13,14 @@ const base: ToastOptions = {
   body: "MyApp: Waiting for your next input",
   sound: "Notification.IM",
 };
+
+// An absolute icon path valid on the current OS (Windows uses a drive letter,
+// POSIX a rooted path). `buildToastXml` runs `pathToFileURL` on it, so the
+// expected `src` must be derived the same way — hardcoding a `file:///C:/...`
+// string only matches on Windows and breaks the Linux/macOS CI runners.
+const ICON_PATH =
+  process.platform === "win32" ? "C:/dev/Ringly/ringly.png" : "/dev/Ringly/ringly.png";
+const ICON_URL = pathToFileURL(ICON_PATH).href;
 
 describe("buildToastXml", () => {
   it("renders a minimal text-only toast (no image, no scenario)", () => {
@@ -25,7 +34,7 @@ describe("buildToastXml", () => {
   });
 
   it("never emits a ToastHeader (grouping is left to the OS default)", () => {
-    const xml = buildToastXml({ ...base, scenario: "reminder", iconPath: "C:/x/ringly.png" });
+    const xml = buildToastXml({ ...base, scenario: "reminder", iconPath: ICON_PATH });
     expect(xml).not.toContain("<header");
   });
 
@@ -46,11 +55,11 @@ describe("buildToastXml", () => {
   });
 
   it("adds a square (uncropped) appLogoOverride image as a file:// URL when iconPath is set", () => {
-    const xml = buildToastXml({ ...base, iconPath: "C:/dev/Ringly/plugin/assets/ringly.png" });
+    const xml = buildToastXml({ ...base, iconPath: ICON_PATH });
     expect(xml).toContain('placement="appLogoOverride"');
     expect(xml).toContain('hint-crop="none"');
     expect(xml).not.toContain('hint-crop="circle"');
-    expect(xml).toContain("file:///C:/dev/Ringly/plugin/assets/ringly.png");
+    expect(xml).toContain(`src="${ICON_URL}"`);
   });
 
   it("escapes XML metacharacters in title and body", () => {
@@ -61,7 +70,7 @@ describe("buildToastXml", () => {
   });
 
   it("keeps text elements after the image inside the binding (ordering matters)", () => {
-    const xml = buildToastXml({ ...base, iconPath: "C:/x/ringly.png" });
+    const xml = buildToastXml({ ...base, iconPath: ICON_PATH });
     const imageIdx = xml.indexOf("appLogoOverride");
     const textIdx = xml.indexOf("<text>");
     expect(imageIdx).toBeGreaterThan(-1);
