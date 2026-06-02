@@ -44,11 +44,11 @@ const SAMPLE_PAYLOADS = {
   },
   TaskCreated: {
     hook_event_name: "TaskCreated",
-    agent_type: "gsd-executor",
+    task_subject: "Refatorar o módulo de login",
   },
   TaskCompleted: {
     hook_event_name: "TaskCompleted",
-    agent_type: "gsd-executor",
+    task_subject: "Refatorar o módulo de login",
   },
   PreCompact: {
     hook_event_name: "PreCompact",

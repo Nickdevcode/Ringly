@@ -69,5 +69,11 @@ export function coerceClaudeHookPayload(raw: unknown): ClaudeHookPayload {
   const trigger = coerceString(obj.trigger);
   if (trigger) result.trigger = trigger;
 
+  const taskSubject = coerceString(obj.task_subject);
+  if (taskSubject) result.task_subject = taskSubject;
+
+  const taskDescription = coerceString(obj.task_description);
+  if (taskDescription) result.task_description = taskDescription;
+
   return result;
 }

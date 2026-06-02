@@ -54,14 +54,18 @@ export async function notify(options: NotifyOptions): Promise<void> {
   // Verbose (high-frequency) events are throttled/deduped so a busy session
   // can't flood the notification center. Non-verbose events (the original
   // four) skip this entirely and never touch the filesystem here.
-  if (EVENT_BY_NAME[options.event].verbose) {
+  const descriptor = EVENT_BY_NAME[options.event];
+  if (descriptor.verbose) {
     const dataDir = await resolveDataDirForThrottle();
     if (dataDir) {
-      const key = throttleKey(
-        options.event,
-        intent.projectName,
-        options.payload.agent_type ?? null,
-      );
+      // Dedup discriminant: for task events the identity is the task title
+      // (so distinct tasks each notify), otherwise the agent name. This keeps
+      // the per-task specificity the toast now shows from being collapsed away.
+      const discriminant =
+        descriptor.resolver === "taskNamed"
+          ? (options.payload.task_subject ?? options.payload.task_description ?? null)
+          : (options.payload.agent_type ?? null);
+      const key = throttleKey(options.event, intent.projectName, discriminant);
       if (!throttleGate(dataDir, key)) {
         logger.debug("Verbose event throttled; skipping", { event: options.event, key });
         return;

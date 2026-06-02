@@ -103,6 +103,8 @@ function resolveBody(
       return resolveStopFailureBody(payload, translator);
     case "agentNamed":
       return resolveAgentNamedBody(descriptor, payload, translator);
+    case "taskNamed":
+      return resolveTaskNamedBody(descriptor, payload, translator);
     case "compact":
       return resolveCompactBody(descriptor, payload, translator);
     default:
@@ -175,6 +177,29 @@ function resolveAgentNamedBody(
   const agent = payload.agent_type?.trim();
   if (agent && agent.length > 0) {
     return translator.t(namedKeyFor(descriptor.bodyKey), { agent });
+  }
+  return translator.t(descriptor.bodyKey);
+}
+
+/**
+ * Body for task events (`TaskCreated`/`TaskCompleted`): shows the human-readable
+ * task title when present, otherwise the plain fallback. The title comes from
+ * `task_subject` (the field Claude Code sends per the hooks docs), falling back
+ * to `task_description`. The named variant lives at the descriptor's `<bodyKey>`
+ * sibling with the trailing segment swapped to `.named` and a `{task}`
+ * placeholder — e.g. `body.taskCompleted.fallback` → `body.taskCompleted.named`.
+ *
+ * Defensive on purpose: if a future Claude Code version renames the field, we
+ * simply fall through to the generic body instead of breaking the toast.
+ */
+function resolveTaskNamedBody(
+  descriptor: EventDescriptor,
+  payload: ClaudeHookPayload,
+  translator: Translator,
+): string {
+  const task = (payload.task_subject ?? payload.task_description)?.trim();
+  if (task && task.length > 0) {
+    return translator.t(namedKeyFor(descriptor.bodyKey), { task });
   }
   return translator.t(descriptor.bodyKey);
 }

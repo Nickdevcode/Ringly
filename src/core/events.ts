@@ -31,12 +31,17 @@ import type { NotificationSeverity, ToastSoundName } from "./types.js";
  *  - `"agentNamed"`   — show `agent_type` if present, else the plain fallback
  *                       (uses `<bodyKey>` for the fallback and the sibling
  *                       `<…>.named` key for the named variant).
+ *  - `"taskNamed"`    — show the task title (`task_subject`, falling back to
+ *                       `task_description`) when present, else the plain
+ *                       fallback. Like `agentNamed` but keyed on the task text
+ *                       instead of the agent name (uses the sibling `<…>.named`
+ *                       key with a `{task}` placeholder).
  *  - `"compact"`      — pick the body by `trigger` (`manual`/`auto`), falling
  *                       back to `<bodyKey>` when absent (uses the sibling
  *                       `<…>.manual` / `<…>.auto` keys).
  *  - omitted          — plain `projectPrefix + t(bodyKey)`.
  */
-export type EventResolver = "notification" | "stopFailure" | "agentNamed" | "compact";
+export type EventResolver = "notification" | "stopFailure" | "agentNamed" | "taskNamed" | "compact";
 
 /**
  * Which Windows toast `scenario` an event maps to. `reminder` keeps the toast
@@ -154,7 +159,7 @@ export const EVENTS = [
     defaultEnabled: false,
     verbose: true,
     icon: "📝",
-    resolver: "agentNamed",
+    resolver: "taskNamed",
   },
   {
     name: "TaskCompleted",
@@ -166,7 +171,7 @@ export const EVENTS = [
     defaultEnabled: false,
     verbose: true,
     icon: "🏁",
-    resolver: "agentNamed",
+    resolver: "taskNamed",
   },
   {
     name: "PreCompact",

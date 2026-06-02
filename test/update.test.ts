@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { buildNotesFor, buildNpmInstallSpec } from "../src/commands/update.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildNotesFor, buildNpmInstallSpec, resolveNotesFor } from "../src/commands/update.js";
 import { createTranslator } from "../src/core/translator.js";
 
 /**
@@ -100,5 +100,62 @@ describe("buildNotesFor", () => {
       expect(item).not.toMatch(/\*\*/);
       expect(item).not.toMatch(/^`|`$/);
     }
+  });
+});
+
+/**
+ * `resolveNotesFor` is the async wrapper the real update flow uses. It prefers
+ * the packaged CHANGELOG (offline, instant) and only falls back to GitHub when
+ * the local file lacks the version — the exact case of a version jump, which is
+ * the bug this fixes. `fetch` is mocked like in `updateCheck.test.ts`.
+ */
+describe("resolveNotesFor", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("uses the packaged CHANGELOG and does NOT hit the network for a known version", async () => {
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy;
+    const translator = createTranslator("pt-BR");
+
+    const notes = await resolveNotesFor("0.5.2", translator);
+    expect(notes).not.toBeNull();
+    expect(notes?.version).toBe("0.5.2");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the remote CHANGELOG when the version is not packaged locally", async () => {
+    // 9.9.9 is not in the packaged CHANGELOG → local miss → remote fetch.
+    const remoteMarkdown = [
+      "# Changelog",
+      "",
+      "## [9.9.9] — 2099-01-01",
+      "",
+      "### 🇧🇷 Português",
+      "",
+      "**Adicionado**",
+      "",
+      "- Recurso futurista de teste",
+      "",
+    ].join("\n");
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(remoteMarkdown, { status: 200 }));
+    const translator = createTranslator("pt-BR");
+
+    const notes = await resolveNotesFor("9.9.9", translator);
+    expect(notes).not.toBeNull();
+    expect(notes?.version).toBe("9.9.9");
+    expect(notes?.heading).toContain("9.9.9");
+    expect(notes?.groups[0]?.items.some((i) => i.includes("futurista"))).toBe(true);
+  });
+
+  it("returns null when the version is missing locally and remote is unreachable", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response("not found", { status: 404 }));
+    const translator = createTranslator("pt-BR");
+
+    expect(await resolveNotesFor("9.9.9", translator)).toBeNull();
   });
 });

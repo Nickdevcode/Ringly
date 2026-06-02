@@ -5,6 +5,50 @@
 
 ---
 
+## [0.7.1] — 2026-06-02
+
+### 🇧🇷 Português
+
+**Corrigido**
+
+- **As notas do `/ringly-update` não apareciam no salto de versão** (`src/core/remoteChangelog.ts`, `src/commands/update.ts`). Quando você tinha a 0.6.0 e atualizava pra 0.7.0, o resumo "o que mudou" vinha vazio. O motivo: o Ringly lia as notas do `CHANGELOG.md` que estava **dentro da versão instalada** — e a 0.6.0, naturalmente, não conhecia a entrada da 0.7.0 (ela só foi escrita quando a 0.7.0 saiu, depois da 0.6.0 já estar publicada). Agora, quando a versão nova não está no CHANGELOG local, o Ringly busca o `CHANGELOG.md` direto do GitHub na tag daquela versão (`vX.Y.Z`, com fallback pra branch `main`), usando só `fetch` nativo do Node com timeout curto. Se a rede falhar, ele continua caindo graciosamente no "notas dessa versão não estão disponíveis" — nada trava.
+
+**Mudado**
+
+- **A notificação de tarefa concluída/criada agora mostra o nome real da tarefa** (`src/core/eventMapper.ts`, `src/core/events.ts`, `src/locales/*.json`). Antes, quando o Claude Code marcava um item da checklist de trabalho como concluído, o toast só dizia um genérico "Tarefa concluída" — muito parecido com o toast de fim de resposta. Agora o corpo mostra **qual** tarefa: por exemplo, `✓ Refatorar o módulo de login`. O texto vem do campo `task_subject` que o Claude Code envia no evento (com fallback pro `task_description`). Se nenhum nome vier, volta ao texto genérico de antes — então nada quebra. O dedup anti-spam desses eventos também passou a considerar o nome da tarefa, pra que duas tarefas diferentes concluídas em sequência apareçam **cada uma** com seu nome, em vez de uma engolir a outra.
+- **O título do evento "fim de resposta" (`Stop`) continua igual** ("Tarefa concluída"). Como a notificação da checklist agora mostra o nome da tarefa, a confusão entre os dois some sozinha — sem precisar renomear nada que você já conhece.
+
+**Testes**
+
+- **+19 testes novos** (de 204 para 223). `test/remoteChangelog.test.ts` cobre a busca remota (200 na tag, fallback pra `main` após 404, network throw, timeout, body vazio/gigante, rejeição de versão malformada sem tocar a rede, host/repo customizados). `test/update.test.ts` ganhou casos do novo `resolveNotesFor` (acha local sem rede, cai pro remoto quando falta local, devolve `null` quando os dois falham). `test/eventMapper.test.ts` cobre o novo resolver de tarefa (nome via `task_subject`, fallback via `task_description`, fallback genérico).
+
+**Notas pra quem tá vindo da v0.7.0**
+
+- **Nada quebra.** Seu `~/.claude/settings.json` segue idêntico, os eventos seguem com os mesmos defaults e o comportamento do `Stop` (a notificação de fim de resposta) não mudou. A única diferença visível é que as notificações de tarefa agora trazem o nome da tarefa, e o `/ringly-update` consegue mostrar as notas mesmo no pulo de versão.
+- O `/ringly-update` agora faz uma chamada de rede extra (ao GitHub) **só** quando o CHANGELOG local não tem a entrada da versão nova — no caso comum (CHANGELOG local já atualizado) nada de rede é adicionado.
+
+### 🇺🇸 English
+
+**Fixed**
+
+- **`/ringly-update` release notes were missing on a version jump** (`src/core/remoteChangelog.ts`, `src/commands/update.ts`). When you were on 0.6.0 and updated to 0.7.0, the "what changed" summary came back empty. Why: Ringly read the notes from the `CHANGELOG.md` shipped **inside the installed version** — and 0.6.0 naturally didn't know about the 0.7.0 entry (it was written when 0.7.0 shipped, after 0.6.0 was already published). Now, when the new version isn't in the local CHANGELOG, Ringly fetches `CHANGELOG.md` straight from GitHub at that version's tag (`vX.Y.Z`, falling back to the `main` branch), using only Node's native `fetch` with a short timeout. If the network fails, it still falls back gracefully to "release notes for this version aren't available" — nothing hangs.
+
+**Changed**
+
+- **The task created/completed notification now shows the real task title** (`src/core/eventMapper.ts`, `src/core/events.ts`, `src/locales/*.json`). Previously, when Claude Code marked a work-checklist item as done, the toast only said a generic "Task completed" — nearly identical to the end-of-response toast. Now the body shows **which** task: e.g. `✓ Refactor the login module`. The text comes from the `task_subject` field Claude Code sends on the event (falling back to `task_description`). If no title is present, it reverts to the old generic text — so nothing breaks. The anti-spam dedup for these events now keys on the task title too, so two different tasks completing back-to-back each show up with their own name instead of one swallowing the other.
+- **The "end of response" event (`Stop`) keeps its title** ("Task complete"). Since the checklist notification now shows the task name, the confusion between the two disappears on its own — no need to rename anything you already know.
+
+**Tests**
+
+- **+19 new tests** (from 204 to 223). `test/remoteChangelog.test.ts` covers the remote fetch (200 on the tag, fallback to `main` after 404, network throw, timeout, empty/oversized body, malformed-version rejection without touching the network, custom host/repo). `test/update.test.ts` gained cases for the new `resolveNotesFor` (finds local without network, falls back to remote when local is missing, returns `null` when both fail). `test/eventMapper.test.ts` covers the new task resolver (title via `task_subject`, fallback via `task_description`, generic fallback).
+
+**Notes for v0.7.0 users**
+
+- **Nothing breaks.** Your `~/.claude/settings.json` stays identical, events keep the same defaults, and the `Stop` behavior (the end-of-response notification) didn't change. The only visible difference is that task notifications now carry the task name, and `/ringly-update` can show notes even across a version jump.
+- `/ringly-update` now makes one extra network call (to GitHub) **only** when the local CHANGELOG lacks the new version's entry — in the common case (local CHANGELOG already current) no network is added.
+
+---
+
 ## [0.7.0] — 2026-06-02
 
 ### 🇧🇷 Português

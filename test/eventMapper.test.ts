@@ -114,17 +114,47 @@ describe("eventMapper - SubagentStart event (agentNamed)", () => {
   });
 });
 
-describe("eventMapper - Task events (agentNamed)", () => {
-  it("TaskCreated shows the agent name", () => {
+describe("eventMapper - Task events (taskNamed)", () => {
+  it("TaskCompleted shows the task title from task_subject", () => {
     const intent = runMap(
-      { hook_event_name: "TaskCreated", cwd: "C:/foo/bar", agent_type: "gsd-executor" },
+      {
+        hook_event_name: "TaskCompleted",
+        cwd: "C:/foo/NewsDev",
+        task_subject: "Refatorar o módulo de login",
+      },
+      "TaskCompleted",
+    );
+    expect(intent.title).toContain("Tarefa concluída");
+    expect(intent.body).toContain("Refatorar o módulo de login");
+    expect(intent.body.startsWith("NewsDev: ")).toBe(true);
+  });
+
+  it("TaskCreated shows the task title from task_subject", () => {
+    const intent = runMap(
+      {
+        hook_event_name: "TaskCreated",
+        cwd: "C:/foo/bar",
+        task_subject: "Escrever testes do parser",
+      },
       "TaskCreated",
     );
     expect(intent.title).toContain("Tarefa criada");
-    expect(intent.body).toContain("gsd-executor");
+    expect(intent.body).toContain("Escrever testes do parser");
   });
 
-  it("TaskCompleted falls back when agent_type missing", () => {
+  it("falls back to task_description when task_subject is absent", () => {
+    const intent = runMap(
+      {
+        hook_event_name: "TaskCompleted",
+        cwd: "C:/foo/bar",
+        task_description: "Ajustar o layout responsivo",
+      },
+      "TaskCompleted",
+    );
+    expect(intent.body).toContain("Ajustar o layout responsivo");
+  });
+
+  it("TaskCompleted falls back to the generic body when no task text is present", () => {
     const intent = runMap({ hook_event_name: "TaskCompleted", cwd: "C:/foo/bar" }, "TaskCompleted");
     expect(intent.body).toContain("Uma tarefa foi concluída");
   });

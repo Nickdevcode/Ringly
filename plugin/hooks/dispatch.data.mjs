@@ -47,7 +47,7 @@ export const DISPATCH_DATA = {
       defaultEnabled: false,
       verbose: true,
       sound: "Notification.IM",
-      resolver: "agentNamed",
+      resolver: "taskNamed",
       scenario: null,
     },
     TaskCompleted: {
@@ -55,7 +55,7 @@ export const DISPATCH_DATA = {
       defaultEnabled: false,
       verbose: true,
       sound: "Notification.IM",
-      resolver: "agentNamed",
+      resolver: "taskNamed",
       scenario: null,
     },
     PreCompact: {

@@ -39,13 +39,19 @@ export function shouldFire(lastMs: number | undefined, now: number, windowMs: nu
   return now - lastMs >= windowMs;
 }
 
-/** Builds the dedup key for an event occurrence. */
+/**
+ * Builds the dedup key for an event occurrence. The third component is the
+ * event's discriminant — what makes two fires "the same" for dedup purposes.
+ * For agent events that's the agent name; for task events it's the task title
+ * (so two different tasks completing within the window each get their own
+ * toast). The caller decides which; this stays event-agnostic.
+ */
 export function throttleKey(
   event: string,
   projectName: string | null,
-  agentType: string | null,
+  discriminant: string | null,
 ): string {
-  return `${event}:${projectName ?? ""}:${agentType ?? ""}`;
+  return `${event}:${projectName ?? ""}:${discriminant ?? ""}`;
 }
 
 export function readThrottleRecord(dataDir: string): ThrottleRecord {

@@ -22,6 +22,7 @@ import {
 import { DEFAULT_CONFIG, loadConfig } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { readOwnVersion } from "../core/ownVersion.js";
+import { fetchRemoteChangelog } from "../core/remoteChangelog.js";
 import { createTranslator, type Translator } from "../core/translator.js";
 import type { SupportedLanguage } from "../core/types.js";
 import { checkForUpdate, type UpdateCheckResult } from "../core/updateCheck.js";
@@ -83,7 +84,7 @@ export async function runUpdate(options: RunUpdateOptions): Promise<void> {
     currentVersion: current,
   });
 
-  const notes = result?.hasUpdate ? buildNotesFor(result.latestVersion, translator) : null;
+  const notes = result?.hasUpdate ? await resolveNotesFor(result.latestVersion, translator) : null;
 
   if (options.check) {
     emitJsonSnapshot(current, result, translator, notes);
@@ -217,15 +218,18 @@ function localizedGroupTitle(heading: string, translator: Translator): string {
 }
 
 /**
- * Builds the localized SnapshotNotes for a given version, by reading the
- * packaged CHANGELOG and selecting the section for `translator.language`.
- * Returns `null` when the CHANGELOG is missing, unparseable, or doesn't
- * have an entry for that version.
+ * Parses a CHANGELOG markdown string and builds the localized SnapshotNotes
+ * for `version`, selecting the section for `translator.language`. Returns
+ * `null` when the markdown is empty/unparseable or has no entry for that
+ * version. Pure (no I/O) — shared by the local and remote note paths.
  */
-export function buildNotesFor(version: string, translator: Translator): SnapshotNotes | null {
-  const raw = readPackagedChangelog(import.meta.url);
-  if (!raw) return null;
-  const entries = parseChangelog(raw);
+export function buildNotesFromMarkdown(
+  markdown: string | null,
+  version: string,
+  translator: Translator,
+): SnapshotNotes | null {
+  if (!markdown) return null;
+  const entries = parseChangelog(markdown);
   const entry = findEntry(entries, version);
   if (!entry) return null;
 
@@ -240,6 +244,34 @@ export function buildNotesFor(version: string, translator: Translator): Snapshot
       items: g.bullets,
     })),
   };
+}
+
+/**
+ * Builds the localized SnapshotNotes from the *packaged* CHANGELOG (the one
+ * shipped inside the installed tarball). Synchronous and offline. Returns
+ * `null` when that CHANGELOG is missing, unparseable, or lacks the version —
+ * which is the expected case on a version jump, where the new version's entry
+ * doesn't exist in the old installed CHANGELOG yet (see `resolveNotesFor`).
+ */
+export function buildNotesFor(version: string, translator: Translator): SnapshotNotes | null {
+  return buildNotesFromMarkdown(readPackagedChangelog(import.meta.url), version, translator);
+}
+
+/**
+ * Resolves release notes for `version`, preferring the packaged CHANGELOG
+ * (instant, offline) and falling back to fetching it from GitHub at that
+ * version's tag. The remote path is what fixes the "notes came back null on a
+ * version jump" bug: the new version's entry lives on GitHub before the user's
+ * installed tarball carries it. Still `null` (gracefully) when both miss.
+ */
+export async function resolveNotesFor(
+  version: string,
+  translator: Translator,
+): Promise<SnapshotNotes | null> {
+  const local = buildNotesFor(version, translator);
+  if (local) return local;
+  const remote = await fetchRemoteChangelog(version);
+  return buildNotesFromMarkdown(remote, version, translator);
 }
 
 function printNotes(notes: SnapshotNotes): void {

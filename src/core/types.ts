@@ -29,6 +29,10 @@ export interface ClaudeHookPayload {
   transcript_path?: string;
   /** PreCompact/PostCompact: what triggered compaction (`manual` | `auto`). */
   trigger?: string;
+  /** TaskCreated/TaskCompleted: human-readable task title (per docs, sent as `task_subject`). */
+  task_subject?: string;
+  /** TaskCreated/TaskCompleted: optional longer task description (`task_description`). */
+  task_description?: string;
 }
 
 export interface NotificationIntent {

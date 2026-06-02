@@ -1,6 +1,6 @@
 {
   "name": "ringly",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Ringly — native cross-platform notifications for Claude Code with i18n (pt-BR / en-US)",
   "type": "module",
   "license": "MIT",
