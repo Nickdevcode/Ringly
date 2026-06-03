@@ -5,6 +5,60 @@
 
 ---
 
+## [0.8.3] — 2026-06-03
+
+### 🇧🇷 Português
+
+**Corrigido**
+
+- **Os 5 eventos "verbosos" voltaram a funcionar pelo caminho principal** (`src/hook.ts`). O ponto de entrada do hook tinha uma lista fixa só com os 4 eventos originais (`Notification`, `Stop`, `StopFailure`, `SubagentStop`) e **não reconhecia** os eventos novos (`SubagentStart`, `TaskCreated`, `TaskCompleted`, `PreCompact`, `PostCompact`) quando o Claude Code os passava como argumento. Eles caíam num caminho de fallback frágil em vez de serem tratados direto. **Agora** o entrypoint usa a mesma fonte única do registro de eventos (`events.ts`), então todo evento é reconhecido — o `SessionStart` (checagem de update) continua tratado à parte, como deve.
+- **O toast de emergência agora mostra mensagem de erro legível, não o código cru** (`plugin/hooks/dispatch.mjs`). Quando o módulo principal não está acessível e o Ringly cai no toast embutido em PowerShell, um erro de API aparecia como `rate_limit` ou `billing_error` (o nome técnico) em vez de "Limite de uso atingido" / "Erro de cobrança". **Agora** o caminho embutido traduz o tipo do erro (e o tipo de notificação) usando os mesmos textos dos locales — sem texto cru na sua tela.
+- **As variáveis de ambiente de configuração passaram a valer também no caminho de emergência** (`plugin/hooks/dispatch.mjs`). O caminho embutido ignorava os overrides via `CLAUDE_PLUGIN_OPTION_*` (idioma, eventos ligados/desligados, som) — só lia o `settings.json`. **Agora** ele aplica os mesmos overrides de ambiente que o caminho principal já respeitava, então os dois caminhos sempre concordam no que disparar.
+- **Contador de tarefa robusto contra arquivo de estado corrompido** (`src/core/sessionProgress.ts`). Se o `session-progress.json` corrompesse (ex.: um campo de lista virar texto), o contador podia inflar (espalhava o texto caractere a caractere e mostrava algo como `3/11` para um checklist de 1 item). **Agora** o Ringly valida cada entrada ao ler do disco, descartando dados malformados e voltando a uma contagem limpa.
+- **`ringly hook` deixou de depender de um detalhe interno do parser de argumentos** (`src/cli.ts`). O comando lia o evento de uma posição interna do `yargs` (`argv["_"][1]`) que poderia quebrar numa atualização da lib. **Agora** usa a forma correta (`hook <event>` + `argv.event`), à prova de mudanças futuras.
+
+**Detalhes técnicos**
+
+- **Escape de XML no som do toast embutido** (`plugin/hooks/dispatch.mjs`): o atributo `src` do `<audio>` agora passa por `escapeXml`, igual aos demais campos e ao caminho TypeScript — defesa em profundidade contra um valor de som com metacaracteres quebrar o XML.
+- **`compareSemver` nunca mais retorna `NaN`** (`src/core/updateCheck.ts`): componentes de versão não-numéricos são tratados como `0` em vez de virar `NaN` (que era silenciosamente lido como "sem update"). A função continua _fail-silent_, agora sempre devolvendo um número.
+- **Geração de dados do fallback** (`scripts/gen-dispatch-data.mjs`): o `dispatch.data.mjs` (gerado e commitado) ganhou os mapas `errorTypes`/`notificationTypes`, derivados das chaves `stopFailure.type.*` e `notification.type.*` dos locales — a mesma fonte única que o resolver TypeScript usa, então os dois caminhos não divergem.
+- **Limpeza de i18n**: removidas 2 chaves não utilizadas dos locales (`cli.update.checking`, `cli.update.notes_unavailable`), mantendo `pt-BR` e `en-US` simétricos.
+
+**Testes**
+
+- **+3 testes** (de 286 para 289): sanitização de estado de progresso corrompido (sem espalhar texto em caracteres) e a garantia de que `compareSemver` nunca retorna `NaN` para entradas malformadas.
+
+**Notas pra quem tá vindo da v0.8.2**
+
+- **Nada quebra e não precisa de nenhum comando.** São correções de consistência e robustez; configs, ícone e toasts seguem idênticos. O arquivo de estado antigo é lido sem erro.
+
+### 🇺🇸 English
+
+**Fixed**
+
+- **The 5 "verbose" events work again through the main path** (`src/hook.ts`). The hook entrypoint had a hardcoded list of only the 4 original events (`Notification`, `Stop`, `StopFailure`, `SubagentStop`) and **didn't recognize** the newer ones (`SubagentStart`, `TaskCreated`, `TaskCompleted`, `PreCompact`, `PostCompact`) when Claude Code passed them as an argument. They fell onto a fragile fallback path instead of being handled directly. **Now** the entrypoint uses the same single source of truth as the event registry (`events.ts`), so every event is recognized — `SessionStart` (the update check) stays handled separately, as it should.
+- **The emergency toast now shows a readable error message, not the raw code** (`plugin/hooks/dispatch.mjs`). When the main module is unreachable and Ringly falls back to the embedded PowerShell toast, an API error showed up as `rate_limit` or `billing_error` (the technical name) instead of "Usage limit reached" / "Billing error". **Now** the embedded path translates the error type (and notification type) using the same locale strings — no raw text on your screen.
+- **Configuration environment variables now apply on the emergency path too** (`plugin/hooks/dispatch.mjs`). The embedded path ignored `CLAUDE_PLUGIN_OPTION_*` overrides (language, enabled/disabled events, sound) — it only read `settings.json`. **Now** it applies the same env overrides the main path already honored, so both paths always agree on what to fire.
+- **Task counter hardened against a corrupted state file** (`src/core/sessionProgress.ts`). If `session-progress.json` got corrupted (e.g. a list field turning into text), the counter could inflate (it spread the text character by character and showed something like `3/11` for a 1-item checklist). **Now** Ringly validates each entry when reading from disk, discarding malformed data and restarting from a clean count.
+- **`ringly hook` no longer depends on an internal arg-parser detail** (`src/cli.ts`). The command read the event from an internal `yargs` position (`argv["_"][1]`) that could break on a library update. **Now** it uses the correct form (`hook <event>` + `argv.event`), future-proof.
+
+**Technical details**
+
+- **XML escaping for the embedded toast sound** (`plugin/hooks/dispatch.mjs`): the `<audio>` `src` attribute now goes through `escapeXml`, like the other fields and the TypeScript path — defense in depth against a sound value with metacharacters breaking the XML.
+- **`compareSemver` never returns `NaN` anymore** (`src/core/updateCheck.ts`): non-numeric version components are treated as `0` instead of becoming `NaN` (which was silently read as "no update"). The function stays _fail-silent_, now always returning a number.
+- **Fallback data generation** (`scripts/gen-dispatch-data.mjs`): the generated-and-committed `dispatch.data.mjs` gained `errorTypes`/`notificationTypes` maps, derived from the locale keys `stopFailure.type.*` and `notification.type.*` — the same single source of truth the TypeScript resolver uses, so the two paths can't drift.
+- **i18n cleanup**: removed 2 unused keys from the locales (`cli.update.checking`, `cli.update.notes_unavailable`), keeping `pt-BR` and `en-US` symmetric.
+
+**Tests**
+
+- **+3 tests** (from 286 to 289): corrupted progress-state sanitization (no character-spreading of text) and the guarantee that `compareSemver` never returns `NaN` for malformed inputs.
+
+**Notes if you're coming from v0.8.2**
+
+- **Nothing breaks and no command is needed.** These are consistency and robustness fixes; settings, icon, and toasts stay identical. The old state file is read without error.
+
+---
+
 ## [0.8.2] — 2026-06-03
 
 ### 🇧🇷 Português

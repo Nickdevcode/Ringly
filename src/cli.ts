@@ -158,7 +158,7 @@ async function main(): Promise<void> {
       },
     )
     .command(
-      "hook",
+      "hook <event>",
       "Internal: dispatch a Claude Code hook payload from stdin",
       (b) =>
         b.positional("event", {
@@ -166,7 +166,7 @@ async function main(): Promise<void> {
           choices: HOOK_EVENT_CHOICES,
         }),
       async (argv) => {
-        const evt = argv["_"][1] as ClaudeHookEventName | "SessionStart" | undefined;
+        const evt = argv.event as ClaudeHookEventName | "SessionStart" | undefined;
         if (evt === "SessionStart") {
           const mod = await import("./commands/updateCheckHook.js");
           await mod.runUpdateCheckHook();

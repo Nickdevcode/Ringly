@@ -36,6 +36,17 @@ describe("compareSemver", () => {
     expect(compareSemver("1.0.0-alpha", "1.0.0-beta")).toBeLessThan(0);
     expect(compareSemver("1.0.0-beta", "1.0.0-alpha")).toBeGreaterThan(0);
   });
+
+  it("never returns NaN for malformed components (coerces unparseable parts to 0)", () => {
+    // Defensive: even if an unvalidated string slips in, the result must stay a
+    // real number so a `> 0` check can't silently read NaN as "no update".
+    expect(Number.isNaN(compareSemver("1.2.x", "1.2.3"))).toBe(false);
+    expect(Number.isNaN(compareSemver("foo", "bar"))).toBe(false);
+    expect(Number.isNaN(compareSemver("", ""))).toBe(false);
+    // "1.2.x" → [1,2,0] equals "1.2.0", and 1.2.0 < 1.2.3.
+    expect(compareSemver("1.2.x", "1.2.3")).toBeLessThan(0);
+    expect(compareSemver("1.2.x", "1.2.0")).toBe(0);
+  });
 });
 
 describe("isValidSemver", () => {

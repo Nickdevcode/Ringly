@@ -74,6 +74,26 @@ const FALLBACK_DATA = {
       SubagentStop: { title: "Claude Code — Subagent finished", body: "A subagent finished" },
     },
   },
+  // Per-type message maps mirror the generated data. Kept minimal here (only the
+  // common API errors) since this inline fallback is the emergency path used
+  // only when `dispatch.data.mjs` itself fails to load.
+  errorTypes: {
+    "pt-BR": {
+      rate_limit: "Limite de uso atingido",
+      authentication_failed: "Falha de autenticação",
+      billing_error: "Erro de cobrança",
+      server_error: "Erro no servidor da Anthropic",
+      unknown: "Erro desconhecido encerrou a sessão",
+    },
+    "en-US": {
+      rate_limit: "Usage limit reached",
+      authentication_failed: "Authentication failed",
+      billing_error: "Billing error",
+      server_error: "Anthropic server error",
+      unknown: "Unknown error ended the session",
+    },
+  },
+  notificationTypes: { "pt-BR": {}, "en-US": {} },
 };
 
 async function loadDispatchData() {
@@ -104,16 +124,56 @@ const DEFAULT_OPTIONS = (() => {
   return opts;
 })();
 
+/**
+ * Parses a tri-state boolean env override (`true`/`1`/`yes` → true,
+ * `false`/`0`/`no` → false, anything else → null). Mirrors `readBoolean` in
+ * `src/core/config.ts` so both paths interpret the env vars identically.
+ */
+function readBoolean(raw) {
+  if (raw === undefined) return null;
+  const normalized = String(raw).trim().toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
+  if (normalized === "false" || normalized === "0" || normalized === "no") return false;
+  return null;
+}
+
+/**
+ * Applies the `CLAUDE_PLUGIN_OPTION_*` env overrides on top of the
+ * settings.json values, matching `applyEnvOverrides` in `src/core/config.ts`.
+ * Without this the embedded fallback path silently ignored env-based config
+ * (language, per-event toggles, sound, check_updates) that the TypeScript path
+ * honors — so the two paths could disagree on what fires.
+ */
+function applyEnvOverrides(opts) {
+  const lang = process.env["CLAUDE_PLUGIN_OPTION_LANGUAGE"];
+  if (lang === "pt-BR" || lang === "en-US" || lang === "auto") opts.language = lang;
+
+  for (const meta of Object.values(DISPATCH_DATA.events)) {
+    const value = readBoolean(
+      process.env[`CLAUDE_PLUGIN_OPTION_EVENTS_${meta.configKey.toUpperCase()}`],
+    );
+    if (value !== null) opts[`events_${meta.configKey}`] = value;
+  }
+
+  const sound = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_SOUND"]);
+  if (sound !== null) opts.sound = sound;
+
+  const checkUpdates = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_CHECK_UPDATES"]);
+  if (checkUpdates !== null) opts.check_updates = checkUpdates;
+
+  return opts;
+}
+
 function loadOptions() {
   try {
-    if (!existsSync(SETTINGS_FILE)) return { ...DEFAULT_OPTIONS };
+    if (!existsSync(SETTINGS_FILE)) return applyEnvOverrides({ ...DEFAULT_OPTIONS });
     const raw = readFileSync(SETTINGS_FILE, { encoding: "utf8" });
-    if (raw.trim().length === 0) return { ...DEFAULT_OPTIONS };
+    if (raw.trim().length === 0) return applyEnvOverrides({ ...DEFAULT_OPTIONS });
     const parsed = JSON.parse(raw);
     const entry = parsed?.pluginConfigs?.ringly?.options ?? {};
-    return { ...DEFAULT_OPTIONS, ...entry };
+    return applyEnvOverrides({ ...DEFAULT_OPTIONS, ...entry });
   } catch {
-    return { ...DEFAULT_OPTIONS };
+    return applyEnvOverrides({ ...DEFAULT_OPTIONS });
   }
 }
 
@@ -439,6 +499,18 @@ function escapeXml(input) {
   return out;
 }
 
+/**
+ * Resolves a localized message for an enum value (e.g. `rate_limit`) from a
+ * `{ lang: { enum: message } }` map, falling back to en-US then null. Used so
+ * the embedded toast shows a friendly line instead of the raw enum token.
+ */
+function lookupType(map, lang, value) {
+  if (!map || !value) return null;
+  const key = value.toString();
+  const dict = map[lang] ?? map["en-US"];
+  return dict?.[key] ?? null;
+}
+
 function buildEmbeddedToast(event, payload) {
   const lang = detectLanguage();
   const meta = DISPATCH_DATA.events[event];
@@ -451,11 +523,19 @@ function buildEmbeddedToast(event, payload) {
 
   // The embedded path is intentionally simpler than the TypeScript resolvers;
   // it just covers the common shapes so a toast still appears when the CLI
-  // module is unreachable.
+  // module is unreachable. For typed events it prefers the localized message
+  // for the enum (mirroring eventMapper.ts) so the user never sees a raw
+  // `rate_limit` / `permission_prompt` token.
   if (event === "Notification") {
-    body = payload?.message?.toString() || entry.body;
+    const typed = lookupType(
+      DISPATCH_DATA.notificationTypes,
+      lang,
+      payload?.notification_type ?? payload?.type,
+    );
+    body = typed || payload?.message?.toString() || entry.body;
   } else if (event === "StopFailure") {
-    body = payload?.error_type?.toString() || payload?.message?.toString() || entry.body;
+    const typed = lookupType(DISPATCH_DATA.errorTypes, lang, payload?.error_type);
+    body = typed || payload?.message?.toString() || payload?.error?.toString() || entry.body;
   } else if (meta?.resolver === "agentNamed" && payload?.agent_type) {
     body = `${payload.agent_type}: ${entry.body}`;
   }
@@ -489,7 +569,9 @@ async function runEmbeddedToast(event, payload) {
   const { title, body, sound, silent, scenario } = buildEmbeddedToast(event, payload);
   const appId = "Claude.Code.CLI";
 
-  const audioTag = silent ? '<audio silent="true"/>' : `<audio src="ms-winsoundevent:${sound}"/>`;
+  const audioTag = silent
+    ? '<audio silent="true"/>'
+    : `<audio src="${escapeXml(`ms-winsoundevent:${sound}`)}"/>`;
   const scenarioAttr =
     scenario && scenario !== "default" ? ` scenario="${escapeXml(scenario)}"` : "";
 

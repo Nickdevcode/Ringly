@@ -147,12 +147,40 @@ export function readProgressRecord(dataDir: string): ProgressRecord {
       typeof (parsed as { sessions: unknown }).sessions === "object" &&
       (parsed as { sessions: unknown }).sessions !== null
     ) {
-      return { sessions: { ...(parsed as ProgressRecord).sessions } };
+      const rawSessions = (parsed as { sessions: Record<string, unknown> }).sessions;
+      const sessions: Record<string, SessionEntry> = {};
+      for (const [sessionId, raw] of Object.entries(rawSessions)) {
+        sessions[sessionId] = sanitizeEntry(raw);
+      }
+      return { sessions };
     }
   } catch {
     /* fall through to empty */
   }
   return { sessions: {} };
+}
+
+/**
+ * Coerces an untrusted entry from disk into a well-formed `SessionEntry`.
+ * Guards against a corrupted (or hand-edited) progress file: without this a
+ * field like `createdIds` arriving as a string would be spread character by
+ * character by `addUnique`, inflating the toast counter's total (e.g. "3/11"
+ * for a one-item checklist). Only `number`-typed, positive ids are kept; every
+ * other field falls back to its empty default.
+ */
+function sanitizeEntry(raw: unknown): SessionEntry {
+  const obj = (typeof raw === "object" && raw !== null ? raw : {}) as Partial<SessionEntry>;
+  const ids = (value: unknown): number[] =>
+    Array.isArray(value)
+      ? value.filter((id): id is number => typeof id === "number" && Number.isFinite(id) && id > 0)
+      : [];
+  return {
+    createdIds: ids(obj.createdIds),
+    completedIds: ids(obj.completedIds),
+    sawCompletion: obj.sawCompletion === true,
+    updatedAt:
+      typeof obj.updatedAt === "number" && Number.isFinite(obj.updatedAt) ? obj.updatedAt : 0,
+  };
 }
 
 /**

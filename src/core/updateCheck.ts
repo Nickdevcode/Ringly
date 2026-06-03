@@ -140,8 +140,13 @@ export function recordCheck(dataDir: string, now: Date = new Date()): void {
 export function compareSemver(a: string, b: string): number {
   const [coreA, preA] = a.split("-", 2);
   const [coreB, preB] = b.split("-", 2);
-  const partsA = (coreA ?? "0.0.0").split(".").map((n) => Number.parseInt(n, 10));
-  const partsB = (coreB ?? "0.0.0").split(".").map((n) => Number.parseInt(n, 10));
+  // Coerce each component to a finite number: a malformed part (e.g. "x")
+  // would otherwise make `Number.parseInt` return NaN, and `ai - bi` would
+  // propagate NaN as the result — which silently reads as "no update" in a
+  // `> 0` check. Treating unparseable parts as 0 keeps the function total
+  // (it always returns a number) without throwing on the fail-silent path.
+  const partsA = (coreA ?? "0.0.0").split(".").map(parseComponent);
+  const partsB = (coreB ?? "0.0.0").split(".").map(parseComponent);
 
   for (let i = 0; i < 3; i++) {
     const ai = partsA[i] ?? 0;
@@ -153,6 +158,12 @@ export function compareSemver(a: string, b: string): number {
   if (!preA && preB) return 1;
   if (preA && preB) return preA.localeCompare(preB);
   return 0;
+}
+
+/** Parses one numeric version component, mapping anything unparseable to 0. */
+function parseComponent(value: string): number {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) ? n : 0;
 }
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;

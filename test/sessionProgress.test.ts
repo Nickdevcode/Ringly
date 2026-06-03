@@ -198,6 +198,49 @@ describe("recordTask (I/O)", () => {
     expect(progress).toEqual({ completed: 1, total: 1 });
   });
 
+  it("sanitizes a corrupted entry whose id lists are not arrays (no string spread)", () => {
+    // A malformed file where `createdIds` is a string would, without sanitizing,
+    // be spread char-by-char by addUnique and inflate the total (e.g. 12 chars
+    // → total 12). The entry must be coerced back to empty arrays on read.
+    writeFileSync(
+      join(dataDir, PROGRESS_FILE),
+      JSON.stringify({
+        sessions: {
+          s1: {
+            createdIds: "not-an-array",
+            completedIds: null,
+            sawCompletion: "yes",
+            updatedAt: Date.now(),
+          },
+        },
+      }),
+      "utf8",
+    );
+    // Completing one task on the sanitized entry must read 1/1, not 1/12.
+    const progress = recordTask(dataDir, "s1", "1", "completed");
+    expect(progress).toEqual({ completed: 1, total: 1 });
+  });
+
+  it("drops non-numeric ids embedded in an otherwise valid id array", () => {
+    writeFileSync(
+      join(dataDir, PROGRESS_FILE),
+      JSON.stringify({
+        sessions: {
+          s1: {
+            createdIds: [1, 2, "3", null, 4],
+            completedIds: [1],
+            sawCompletion: false,
+            updatedAt: Date.now(),
+          },
+        },
+      }),
+      "utf8",
+    );
+    const record = readProgressRecord(dataDir);
+    expect(record.sessions.s1?.createdIds).toEqual([1, 2, 4]);
+    expect(record.sessions.s1?.completedIds).toEqual([1]);
+  });
+
   it("persists the checklist boundary across separate calls (sawCompletion)", () => {
     // The reset depends on `sawCompletion` surviving in the JSON file between
     // hook invocations — guard against it being dropped on read/write.

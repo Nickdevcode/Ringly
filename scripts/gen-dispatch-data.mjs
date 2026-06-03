@@ -58,7 +58,16 @@ for (const lang of Object.keys(LOCALES)) {
   }
 }
 
-const data = { events, translations };
+// Per-type message maps for the embedded fallback so a StopFailure / Notification
+// toast shows a friendly localized line ("Usage limit reached") instead of the
+// raw enum ("rate_limit") when the CLI module is unreachable. Derived straight
+// from the locale keys (`stopFailure.type.*` / `notification.type.*`) — same
+// source of truth the TypeScript resolver in `eventMapper.ts` uses, so the two
+// paths can never drift. Keyed by the bare enum value (e.g. `rate_limit`).
+const errorTypes = collectTypeMap("stopFailure.type.");
+const notificationTypes = collectTypeMap("notification.type.");
+
+const data = { events, translations, errorTypes, notificationTypes };
 
 const dispatchDataPath = resolve(root, "plugin", "hooks", "dispatch.data.mjs");
 const banner =
@@ -106,6 +115,26 @@ console.log(
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+/**
+ * Builds `{ lang: { <enum>: <message> } }` from every locale key under
+ * `prefix` (e.g. `stopFailure.type.`). The enum is the key suffix, so
+ * `stopFailure.type.rate_limit` becomes `rate_limit`. Lets the embedded
+ * dispatcher localize an error/notification type without re-listing them.
+ */
+function collectTypeMap(prefix) {
+  const out = {};
+  for (const lang of Object.keys(LOCALES)) {
+    const dict = LOCALES[lang];
+    out[lang] = {};
+    for (const key of Object.keys(dict)) {
+      if (key.startsWith(prefix)) {
+        out[lang][key.slice(prefix.length)] = dict[key];
+      }
+    }
+  }
+  return out;
 }
 
 function formatWithBiome(files) {
