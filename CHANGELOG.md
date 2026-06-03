@@ -5,6 +5,48 @@
 
 ---
 
+## [0.8.2] — 2026-06-03
+
+### 🇧🇷 Português
+
+**Corrigido**
+
+- **O contador de tarefa concluída (`concluídas/total`) ainda mostrava o total errado — agora conta certinho `1/4, 2/4, 3/4, 4/4`** (`src/core/notifier.ts`, `plugin/hooks/dispatch.mjs`). A correção da v0.8.1 arrumou a _lógica_ do contador, mas o bug continuava aparecendo na tela: ao concluir as tarefas uma a uma, a primeira não mostrava número e as seguintes mostravam `2/2`, `3/3`… **Causa:** o denominador (o "de quantas") depende de o Ringly **registrar as tarefas criadas**, mas o evento `TaskCreated` vem **desligado por padrão** (pra não encher de toast a cada tarefa criada) — e o registro estava preso atrás da mesma trava que decide se mostra o toast. Resultado: as criações nunca eram contadas e o total só crescia junto com as conclusões (`1/1, 2/2, 3/3`). **Agora** o registro das criações foi **desacoplado** do toast: sempre que o contador está ligado (`tarefa concluída` ON), o Ringly conta as criações em silêncio (sem toast nenhum), então o total fica correto. O toast de "tarefa criada" continua controlado **só** pela opção `tarefa criada`, como antes.
+- **Contagem confiável quando você conclui várias tarefas rápido (condição de corrida)** (`src/core/sessionProgress.ts`, `src/core/throttle.ts`, novo `src/core/fileLock.ts`). Cada evento de hook do Claude Code roda em um **processo separado**. Quando você marcava várias tarefas concluídas em sequência rápida, os processos liam e gravavam o arquivo de estado ao mesmo tempo e um sobrescrevia o outro ("lost update") — às vezes o contador pulava ou repetia número, e no Windows o arquivo de estado podia até falhar de gravar. **Agora** o Ringly usa uma trava de arquivo entre processos (via `mkdir` atômico, sem dependência nova) ao redor da leitura-modificação-escrita, então conclusões simultâneas não se atropelam mais.
+
+**Detalhes técnicos**
+
+- A nova função `recordTaskProgress` no `notifier.ts` separa "registrar progresso" de "exibir toast"; o caso `TaskCreated`-desligado-mas-contador-ligado é tratado tanto no caminho TypeScript (`notify`) quanto no launcher embutido do plugin (`dispatch.mjs`, que agora deixa o `TaskCreated` chegar ao módulo pra ser contado, sem cair no toast embutido). A trava (`fileLock.ts`) usa `mkdir` como mutex (atômico em NTFS e POSIX), com retry curto, quebra de trava órfã por idade e _fail-open_ (se não conseguir travar, segue sem travar em vez de perder o toast). O bundle do hook continua enxuto (~53,7 KB; só `node:fs`, sem nova cadeia pesada).
+
+**Testes**
+
+- **+11 testes** (de 275 para 286): o cenário real reproduzido ponta-a-ponta (`TaskCreated` desligado + contador ligado → `1/4, 2/4, 3/4, 4/4`), a unidade da trava de arquivo (exclusão mútua, quebra de trava órfã, _fail-open_) e a regressão de concorrência com **processos reais paralelos** (que falha sem a trava e passa com ela).
+
+**Notas pra quem tá vindo da v0.8.1**
+
+- **Nada quebra e não precisa de nenhum comando.** Só a contagem ficou correta. O arquivo de estado antigo é lido sem erro e recomeça limpo.
+
+### 🇺🇸 English
+
+**Fixed**
+
+- **The task-completed counter (`completed/total`) still showed the wrong total — now it counts correctly `1/4, 2/4, 3/4, 4/4`** (`src/core/notifier.ts`, `plugin/hooks/dispatch.mjs`). The v0.8.1 fix corrected the counter's _logic_, but the bug kept showing on screen: completing tasks one by one, the first showed no number and the rest showed `2/2`, `3/3`… **Cause:** the denominator (the "out of how many") depends on Ringly **recording created tasks**, but the `TaskCreated` event is **off by default** (so it doesn't spam a toast per created task) — and the recording sat behind the same gate that decides whether to show the toast. So creations were never counted and the total only grew alongside completions (`1/1, 2/2, 3/3`). **Now** recording creations is **decoupled** from the toast: whenever the counter is on (`task completed` ON), Ringly tallies creations silently (no toast at all), so the total is right. The "task created" toast is still controlled **solely** by the `task created` option, as before.
+- **Reliable count when you complete several tasks quickly (race condition)** (`src/core/sessionProgress.ts`, `src/core/throttle.ts`, new `src/core/fileLock.ts`). Each Claude Code hook event runs in a **separate process**. When you marked several tasks complete in quick succession, the processes read and wrote the state file at the same time and one clobbered the other ("lost update") — the counter sometimes skipped or repeated a number, and on Windows the state file could even fail to write. **Now** Ringly uses a cross-process file lock (via atomic `mkdir`, no new dependency) around the read-modify-write, so simultaneous completions no longer collide.
+
+**Technical details**
+
+- The new `recordTaskProgress` helper in `notifier.ts` separates "record progress" from "show toast"; the `TaskCreated`-off-but-counter-on case is handled both in the TypeScript path (`notify`) and the plugin's embedded launcher (`dispatch.mjs`, which now lets `TaskCreated` reach the module to be tallied without falling through to the embedded toast). The lock (`fileLock.ts`) uses `mkdir` as a mutex (atomic on NTFS and POSIX), with a short retry, stale-lock breaking by age, and _fail-open_ (if it can't lock, it proceeds unlocked rather than dropping the toast). The hook bundle stays lean (~53.7 KB; only `node:fs`, no new heavy chain).
+
+**Tests**
+
+- **+11 tests** (from 275 to 286): the real scenario reproduced end-to-end (`TaskCreated` off + counter on → `1/4, 2/4, 3/4, 4/4`), the file-lock unit (mutual exclusion, stale-lock breaking, fail-open), and the concurrency regression with **real parallel processes** (which fails without the lock and passes with it).
+
+**Notes if you're coming from v0.8.1**
+
+- **Nothing breaks and no command is needed.** Only the count got correct. The old state file is read without error and restarts cleanly.
+
+---
+
 ## [0.8.1] — 2026-06-02
 
 ### 🇧🇷 Português

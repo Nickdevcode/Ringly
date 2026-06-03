@@ -27,6 +27,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteFileSync } from "./atomicWrite.js";
+import { withFileLock } from "./fileLock.js";
 import type { TaskProgress } from "./types.js";
 
 const PROGRESS_FILENAME = "session-progress.json";
@@ -172,13 +173,20 @@ export function recordTask(
   const taskId = Number.parseInt(taskIdRaw, 10);
   if (!Number.isFinite(taskId)) return undefined;
 
+  const path = join(dataDir, PROGRESS_FILENAME);
   try {
-    const record = readProgressRecord(dataDir);
-    const next = applyTask(record.sessions[sessionId] ?? emptyEntry(now), taskId, kind, now);
-    record.sessions[sessionId] = next;
-    pruneStale(record, now, ttlMs);
-    atomicWriteFileSync(join(dataDir, PROGRESS_FILENAME), JSON.stringify(record));
-    return deriveProgress(next);
+    // Hold the lock across the WHOLE read-modify-write: hook events fire as
+    // concurrent processes, so reading, folding in this event, and writing must
+    // be one critical section or concurrent completions clobber each other's
+    // ids (lost update → a counter that skips/repeats numbers).
+    return withFileLock(path, () => {
+      const record = readProgressRecord(dataDir);
+      const next = applyTask(record.sessions[sessionId] ?? emptyEntry(now), taskId, kind, now);
+      record.sessions[sessionId] = next;
+      pruneStale(record, now, ttlMs);
+      atomicWriteFileSync(path, JSON.stringify(record));
+      return deriveProgress(next);
+    });
   } catch {
     return undefined;
   }

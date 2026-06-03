@@ -16,6 +16,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteFileSync } from "./atomicWrite.js";
+import { withFileLock } from "./fileLock.js";
 
 const THROTTLE_FILENAME = "event-throttle.json";
 
@@ -86,14 +87,21 @@ export function throttleGate(
   windowMs: number = DEFAULT_THROTTLE_WINDOW_MS,
   now: number = Date.now(),
 ): boolean {
+  const path = join(dataDir, THROTTLE_FILENAME);
   try {
-    const record = readThrottleRecord(dataDir);
-    if (!shouldFire(record.events[key], now, windowMs)) return false;
+    // Same concurrency hazard as `sessionProgress`: the read-decide-write must
+    // be one critical section across the parallel hook processes, or two
+    // near-simultaneous events both read "no prior fire" and both fire (or both
+    // overwrite the timestamp), defeating the dedup and dropping a toast.
+    return withFileLock(path, () => {
+      const record = readThrottleRecord(dataDir);
+      if (!shouldFire(record.events[key], now, windowMs)) return false;
 
-    record.events[key] = now;
-    pruneStale(record, now, windowMs);
-    atomicWriteFileSync(join(dataDir, THROTTLE_FILENAME), JSON.stringify(record));
-    return true;
+      record.events[key] = now;
+      pruneStale(record, now, windowMs);
+      atomicWriteFileSync(path, JSON.stringify(record));
+      return true;
+    });
   } catch {
     return true;
   }

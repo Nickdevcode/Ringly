@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "ringly",
   "displayName": "Ringly",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Ringly — native cross-platform notifications for Claude Code with i18n (pt-BR / en-US). Configure with the `ringly config` CLI (the Claude Code plugin manager UI is intentionally not used).",
   "author": {
     "name": "Nicolas Carvalho",

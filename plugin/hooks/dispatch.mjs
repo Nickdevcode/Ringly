@@ -147,6 +147,20 @@ function eventEnabled(event) {
   return meta.defaultEnabled ? value !== false : value === true;
 }
 
+/**
+ * Whether this event must still be HANDLED by the CLI module even though it
+ * won't itself show a toast. The `TaskCompleted` counter ("2/4") needs the CLI
+ * to record every `TaskCreated` so its denominator is right — but `TaskCreated`
+ * is off by default. So when the counter (`TaskCompleted`) is enabled, we let
+ * `TaskCreated` through to the CLI module to be tallied silently. The CLI side
+ * (`notifier.ts`) records it without emitting a creation toast. We must NOT fall
+ * back to the embedded toast for this case (that would show a creation toast the
+ * user disabled), so this is tracked separately from `eventEnabled`.
+ */
+function shouldRecordSilently(event) {
+  return event === "TaskCreated" && !eventEnabled("TaskCreated") && eventEnabled("TaskCompleted");
+}
+
 async function readStdin() {
   if (process.stdin.isTTY) return "";
   return await new Promise((resolve) => {
@@ -540,13 +554,27 @@ async function main() {
 
   debugLog(`Event=${event}, stdinBytes=${rawStdin.length}, opts=${JSON.stringify(OPTIONS)}`);
 
-  if (!eventEnabled(event)) {
+  // `TaskCreated` while the counter is on but its own toast is off: it must
+  // still reach the CLI module to be tallied (the counter's denominator), but
+  // must NOT show a toast — so we route it to the module and stop, never
+  // reaching the embedded-toast fallback below.
+  const recordOnly = shouldRecordSilently(event);
+
+  if (!eventEnabled(event) && !recordOnly) {
     debugLog(`Event ${event} disabled by user settings; skipping`);
     return;
   }
 
   if (await tryNodeModule(event, rawStdin)) return;
   if (await tryCliBinary(event, rawStdin)) return;
+
+  // Record-only events have no user-facing toast — if the CLI module/binary is
+  // unreachable there is nothing the embedded toast should do (showing one
+  // would be the very creation toast the user disabled), so stop here.
+  if (recordOnly) {
+    debugLog(`Event ${event} is record-only and no CLI reachable; skipping toast`);
+    return;
+  }
 
   // SessionStart is an update-check trigger, not a user-facing notification.
   // If the CLI module/binary is unreachable we cannot perform the check —

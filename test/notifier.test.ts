@@ -256,3 +256,84 @@ describe("notify - TaskCompleted progress counter", () => {
     expect(lastBody()).toBe("App: ✓ A");
   });
 });
+
+describe("notify - counter with TaskCreated toast OFF (the default; regression)", () => {
+  // The reported bug: users keep `taskCreated` OFF (its default — they don't
+  // want a toast per created task) but `taskCompleted` ON to see the counter.
+  // The denominator must still be right (1/4, 2/4, …), which requires recording
+  // creations even though they show no toast. The pre-fix code gated the tally
+  // behind the same enabled-check as the toast, so creations were never counted
+  // and the counter read 1/1, 2/2, 3/3. Every existing counter test enabled
+  // BOTH flags, so none of them exercised this — hence this dedicated block.
+  let dataDir: string;
+  const originalDataDir = process.env["CLAUDE_PLUGIN_DATA"];
+  // taskCreated OFF (default), taskCompleted ON.
+  const config: RinglyConfig = {
+    ...DEFAULT_CONFIG,
+    language: "pt-BR",
+    events: { ...DEFAULT_CONFIG.events, taskCreated: false, taskCompleted: true },
+  };
+
+  const lastBody = () => {
+    const calls = dispatchSpy.mock.calls;
+    return (calls[calls.length - 1]?.[0] as { body: string } | undefined)?.body;
+  };
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), "ringly-counter-off-"));
+    process.env["CLAUDE_PLUGIN_DATA"] = dataDir;
+    dispatchSpy.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+    if (originalDataDir === undefined) delete process.env["CLAUDE_PLUGIN_DATA"];
+    else process.env["CLAUDE_PLUGIN_DATA"] = originalDataDir;
+  });
+
+  const created = (id: string) =>
+    notify({
+      event: "TaskCreated",
+      payload: { cwd: "/x/App", session_id: "s1", task_id: id, task_subject: `t${id}` },
+      config,
+    });
+  const completed = (id: string) =>
+    notify({
+      event: "TaskCompleted",
+      payload: { cwd: "/x/App", session_id: "s1", task_id: id, task_subject: `done${id}` },
+      config,
+    });
+
+  it("TaskCreated fires NO toast when its flag is off", async () => {
+    await created("1");
+    expect(dispatchSpy).not.toHaveBeenCalled();
+  });
+
+  it("still counts the full denominator: 1/4, 2/4, 3/4, 4/4 (not 1/1, 2/2, …)", async () => {
+    for (const id of ["1", "2", "3", "4"]) await created(id);
+    // No toast yet from the creations.
+    expect(dispatchSpy).not.toHaveBeenCalled();
+
+    await completed("1");
+    expect(lastBody()).toBe("App: ✓ done1 (1/4)");
+    await completed("2");
+    expect(lastBody()).toBe("App: ✓ done2 (2/4)");
+    await completed("3");
+    expect(lastBody()).toBe("App: ✓ done3 (3/4)");
+    await completed("4");
+    expect(lastBody()).toBe("App: ✓ done4 (4/4)");
+  });
+
+  it("a fresh checklist still restarts at 1/N with creations toast off", async () => {
+    for (const id of ["1", "2", "3", "4"]) await created(id);
+    await completed("1");
+    await completed("2");
+    expect(lastBody()).toBe("App: ✓ done2 (2/4)");
+
+    // New batch — ids keep climbing on Claude Code's side.
+    await created("5");
+    await created("6");
+    await completed("5");
+    expect(lastBody()).toBe("App: ✓ done5 (1/2)");
+  });
+});
