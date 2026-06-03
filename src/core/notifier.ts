@@ -9,12 +9,15 @@ import type {
   ClaudeHookPayload,
   NotificationIntent,
   RinglyConfig,
+  TaskProgress,
 } from "./types.js";
 
 export interface BuildIntentOptions {
   payload: ClaudeHookPayload;
   event: ClaudeHookEventName;
   config: RinglyConfig;
+  /** Per-session task progress for the `TaskCompleted` counter (optional). */
+  progress?: TaskProgress | undefined;
 }
 
 export function buildIntent(options: BuildIntentOptions): NotificationIntent {
@@ -26,6 +29,7 @@ export function buildIntent(options: BuildIntentOptions): NotificationIntent {
     translator,
     soundEnabled: options.config.sound,
     projectDirOverride: projectDir,
+    progress: options.progress,
   });
 }
 
@@ -58,18 +62,51 @@ export async function notify(options: NotifyOptions): Promise<void> {
   if (descriptor.verbose) {
     const dataDir = await resolveDataDirForThrottle();
     if (dataDir) {
+      // Task events carry a per-session sequential `task_id`. We fold every
+      // task event into per-session progress state (so `maxId`/the total grows
+      // as tasks appear), but only surface the counter on `TaskCompleted`.
+      // Recorded BEFORE the throttle gate: a throttled completion must still
+      // count — throttling is anti-spam for the toast, not for the tally.
+      let progress: TaskProgress | undefined;
+      const { payload, event } = options;
+      if (descriptor.resolver === "taskNamed" && payload.session_id && payload.task_id) {
+        try {
+          const { recordTask } = await import("./sessionProgress.js");
+          const recorded = recordTask(
+            dataDir,
+            payload.session_id,
+            payload.task_id,
+            event === "TaskCompleted",
+          );
+          if (event === "TaskCompleted") progress = recorded;
+        } catch {
+          /* fail-open: notify without a counter */
+        }
+      }
+
+      // Rebuild the intent only when we actually have a counter to show; the
+      // common case keeps the single `buildIntent` above. (Cheap: no I/O,
+      // just translator + mapper.)
+      const effectiveIntent = progress
+        ? buildIntent({ event, payload, config: options.config, progress })
+        : intent;
+
       // Dedup discriminant: for task events the identity is the task title
       // (so distinct tasks each notify), otherwise the agent name. This keeps
       // the per-task specificity the toast now shows from being collapsed away.
       const discriminant =
         descriptor.resolver === "taskNamed"
-          ? (options.payload.task_subject ?? options.payload.task_description ?? null)
-          : (options.payload.agent_type ?? null);
-      const key = throttleKey(options.event, intent.projectName, discriminant);
+          ? (payload.task_subject ?? payload.task_description ?? null)
+          : (payload.agent_type ?? null);
+      const key = throttleKey(event, effectiveIntent.projectName, discriminant);
       if (!throttleGate(dataDir, key)) {
-        logger.debug("Verbose event throttled; skipping", { event: options.event, key });
+        logger.debug("Verbose event throttled; skipping", { event, key });
         return;
       }
+
+      const channels = buildDefaultChannels({ appId: options.config.appId });
+      await dispatchToChannels(effectiveIntent, channels);
+      return;
     }
   }
 

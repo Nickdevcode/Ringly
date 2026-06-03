@@ -247,10 +247,16 @@ ringly uninstall               # remove AUMID, atalho e configurações do Ringl
      sem CLI, ele toca no máximo um beep e sai.
 5. No Windows, o toast é gerado como XML e exibido via o AUMID registrado
    `Claude.Code.CLI`. O XML inclui **timestamp**, **agrupamento por projeto** (header da Central
-   de Notificações) e, quando houver um `plugin/assets/ringly.png`, o **ícone do app**
-   (`appLogoOverride`, recortado em círculo). Eventos de compactação usam `scenario="reminder"`
-   (ficam fixos na tela até você dispensar). Um beep é tocado como fallback se o Modo Foco ou
-   Não Perturbe estiverem bloqueando as notificações.
+   de Notificações) e, quando houver um `plugin/assets/ringly.png`, a **imagem do app**
+   dentro do toast (`appLogoOverride`). O **ícone do canto/topo** vem do atalho do Menu
+   Iniciar: o Ringly registra esse atalho apontando para o `plugin/assets/ringly.ico` (as
+   ondas ciano da marca) em vez do ícone do Node. Eventos de compactação usam
+   `scenario="reminder"` (ficam fixos na tela até você dispensar). Um beep é tocado como
+   fallback se o Modo Foco ou Não Perturbe estiverem bloqueando as notificações.
+6. A notificação de **tarefa concluída** (`TaskCompleted`) mostra o nome da tarefa e um
+   **contador `concluídas/total`** — por exemplo `✓ Refatorar login (3/10)`. O total é
+   estimado por sessão (o Claude Code não envia esse número), então o contador é omitido
+   quando o total ainda é indeterminado; o número de concluídas é sempre exato.
 
 ### Solução de problemas
 
@@ -520,10 +526,15 @@ ringly uninstall               # remove AUMID, shortcut, and Ringly settings
      without the CLI it plays a beep at best and exits.
 5. On Windows, the toast is generated as XML and shown via the registered
    AUMID `Claude.Code.CLI`. The XML carries a **timestamp**, **per-project grouping** (an Action
-   Center header) and, when a `plugin/assets/ringly.png` exists, the **app icon**
-   (`appLogoOverride`, circle-cropped). Compaction events use `scenario="reminder"` (they stay
-   on screen until dismissed). A beep is played as a fallback if Focus Assist or Do Not Disturb
-   is blocking notifications.
+   Center header) and, when a `plugin/assets/ringly.png` exists, the **in-toast app image**
+   (`appLogoOverride`). The **corner icon** comes from the Start Menu shortcut: Ringly registers
+   it pointing at `plugin/assets/ringly.ico` (the brand's cyan rings) instead of the Node.js
+   icon. Compaction events use `scenario="reminder"` (they stay on screen until dismissed). A
+   beep is played as a fallback if Focus Assist or Do Not Disturb is blocking notifications.
+6. The **task-completed** notification (`TaskCompleted`) shows the task name plus a
+   **`completed/total` counter** — e.g. `✓ Refactor login (3/10)`. The total is estimated
+   per session (Claude Code doesn't send it), so the counter is omitted while the total is
+   still undetermined; the completed count is always exact.
 
 ### Troubleshooting
 

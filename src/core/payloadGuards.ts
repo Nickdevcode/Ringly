@@ -16,6 +16,8 @@ import type { ClaudeHookEventName, ClaudeHookPayload } from "./types.js";
 // toast body; 1024 covers realistic file paths even on deep WSL/macOS trees.
 const MAX_STRING_LENGTH = 500;
 const MAX_PATH_LENGTH = 1024;
+// Task ids are short tokens ("1", "2", …); cap tightly to reject anything odd.
+const MAX_ID_LENGTH = 64;
 
 function coerceString(value: unknown, maxLength: number = MAX_STRING_LENGTH): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -74,6 +76,9 @@ export function coerceClaudeHookPayload(raw: unknown): ClaudeHookPayload {
 
   const taskDescription = coerceString(obj.task_description);
   if (taskDescription) result.task_description = taskDescription;
+
+  const taskId = coerceString(obj.task_id, MAX_ID_LENGTH);
+  if (taskId) result.task_id = taskId;
 
   return result;
 }

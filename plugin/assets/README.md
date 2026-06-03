@@ -1,26 +1,49 @@
 # Ringly — assets
 
-Coloque aqui o ícone do app usado nas notificações (toast) do Windows.
+Esta pasta guarda os dois ícones que aparecem nas notificações (toast) do Windows.
+Ambos são publicados junto do pacote npm (`package.json` → `files` inclui `plugin/`),
+então acompanham tanto o plugin quanto a CLI.
 
-## Como adicionar a logo
+| Arquivo | Onde aparece | Como é mantido |
+|---|---|---|
+| `ringly.png` | **Imagem grande dentro** do toast (`appLogoOverride`) | arquivo estático (a estrela do Claude Code) |
+| `ringly.ico` | **Ícone do canto/topo** do toast (via atalho do Menu Iniciar / AUMID) | **gerado** por `scripts/gen-icon.mjs` |
 
-1. Salve um arquivo PNG quadrado com o nome exato **`ringly.png`** nesta pasta
-   (`plugin/assets/ringly.png`).
-2. Recomendado: **PNG quadrado, fundo transparente, 256×256** (ou maior). O
-   Windows recorta em círculo (`hint-crop="circle"`) no `appLogoOverride`, então
-   uma arte centralizada fica melhor.
-3. Pronto. O Ringly resolve o caminho em runtime e passa a exibir o ícone no
-   toast. Se o arquivo **não** existir, a notificação simplesmente aparece sem
-   ícone (degradação graciosa) — nada quebra.
+---
 
-## Detalhes técnicos
+## `ringly.png` — imagem grande do toast
 
-- O ícone é referenciado no XML do toast como
-  `<image placement="appLogoOverride" hint-crop="circle" src="file:///…/ringly.png"/>`.
-- A resolução do caminho está em `src/platform/windows/icon.ts` (procura em
-  `CLAUDE_PLUGIN_ROOT/assets/` e relativo ao módulo empacotado).
-- O arquivo é publicado junto do pacote npm (`package.json` → `files` inclui
-  `plugin/`), então acompanha tanto o plugin quanto a CLI.
+1. PNG quadrado com o nome exato **`ringly.png`** nesta pasta.
+2. Recomendado: **256×256 (ou maior), fundo transparente**, arte centralizada.
+3. Resolução em runtime: `src/platform/windows/icon.ts` (`resolveIconPath`). Se o
+   arquivo não existir, o toast aparece **sem** a imagem grande (degradação graciosa).
+4. Referenciado no XML do toast como
+   `<image placement="appLogoOverride" hint-crop="none" src="file:///…/ringly.png"/>`.
 
-> Observação: até a logo definitiva ser adicionada, este `README.md` mantém a
-> pasta versionada. Pode trocar/atualizar o `ringly.png` quando quiser.
+## `ringly.ico` — ícone do canto
+
+O ícone do canto do toast vem do atalho **`Claude Code.lnk`** no Menu Iniciar (o
+AUMID). Sem um `.ico` próprio, o Windows usava o ícone do `node.exe` (o logo verde
+do Node). O `ringly.ico` substitui isso pelo ícone do Ringly (ondas concêntricas
+ciano, igual ao favicon do site).
+
+- Resolução em runtime: `src/platform/windows/icon.ts` (`resolveShortcutIconPath`).
+- Aplicado no registro do atalho: `src/platform/windows/aumid.ts` (`detectIconPath`).
+- Quem já tinha o atalho com o ícone do Node: rodar **`ringly init`** uma vez
+  reescreve o atalho com o `ringly.ico` (o registro detecta o ícone divergente).
+
+### Como regenerar o `ringly.ico`
+
+> **Windows-only.** O gerador usa PowerShell + `System.Drawing` para rasterizar a
+> geometria, então o `.ico` é gerado no Windows e **commitado** (o CI roda em
+> Linux/macOS e não o regenera).
+
+```powershell
+npm run build             # gera dist/ico.js (o empacotador ICO testado)
+node scripts/gen-icon.mjs # desenha 16/32/48/64/128/256 e grava plugin/assets/ringly.ico
+```
+
+A geometria espelha `Ringly-landing/public/favicon.svg` (viewBox 32; retângulo
+arredondado `rx=7`; anéis `r=6/10.5/14` + ponto central `r=2`; ciano `#67E8F9`
+sobre fundo `#0A0B0F`). O empacotamento binário do `.ico` vive em
+`src/platform/windows/ico.ts` (`packIco`) e é coberto por `test/ico.test.ts`.

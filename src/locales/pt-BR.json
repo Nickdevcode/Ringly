@@ -19,6 +19,7 @@
   "body.taskCreated.named": "✓ Nova tarefa: {task}",
   "body.taskCompleted.fallback": "Uma tarefa foi concluída",
   "body.taskCompleted.named": "✓ {task}",
+  "body.taskCompleted.named_counted": "✓ {task} ({completed}/{total})",
   "body.preCompact.fallback": "O histórico da conversa está sendo compactado",
   "body.preCompact.manual": "Compactando o histórico (solicitado por você)",
   "body.preCompact.auto": "Compactando o histórico automaticamente",

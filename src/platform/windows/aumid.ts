@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { logger } from "../../core/logger.js";
+import { resolveShortcutIconPath } from "./icon.js";
 import { runPowerShell } from "./powershell.js";
 import { buildAumidQueryScript, buildAumidRegisterScript } from "./ps-templates.js";
 
@@ -9,6 +10,8 @@ export interface AumidStatus {
   shortcutExists: boolean;
   shortcutPath: string;
   aumid: string | null;
+  /** The shortcut's current `IconLocation` (e.g. `…\node.exe,0`), or null. */
+  iconLocation: string | null;
   notifierSetting: string | null;
   error: string | null;
 }
@@ -64,10 +67,32 @@ export function detectClaudeExecutable(): string | null {
   return null;
 }
 
+/**
+ * Picks the shortcut's icon. Prefers the bundled `ringly.ico` (so the toast's
+ * corner shows the Ringly mark instead of the Node.js logo). Falls back to the
+ * old behavior — the Node.js icon, then the target exe — only when the bundled
+ * `.ico` can't be found, so a missing asset never leaves the shortcut iconless.
+ */
 function detectIconPath(targetPath: string): string {
+  const bundled = resolveShortcutIconPath();
+  if (bundled) return bundled;
   const nodeExe = process.env.ProgramFiles && join(process.env.ProgramFiles, "nodejs", "node.exe");
   if (nodeExe && existsSync(nodeExe)) return `${nodeExe},0`;
   return `${targetPath},0`;
+}
+
+/**
+ * Whether the shortcut's current icon already matches what we'd set. Tolerant
+ * by design: trims, lowercases, and ignores a trailing `,<index>` suffix.
+ * When the desired icon is the bundled `ringly.ico`, we match by filename
+ * (`ringly.ico`) rather than full path, since the absolute path differs across
+ * machines/installs. `null` (no current icon) never matches → forces a rewrite.
+ */
+export function iconMatches(current: string | null, desired: string): boolean {
+  if (!current) return false;
+  const norm = (s: string) => s.trim().toLowerCase().replace(/,\d+$/, "");
+  if (/ringly\.ico$/i.test(desired)) return /ringly\.ico$/i.test(norm(current));
+  return norm(current) === norm(desired);
 }
 
 export async function queryAumidStatus(
@@ -77,6 +102,7 @@ export async function queryAumidStatus(
     shortcutExists: existsSync(shortcutPath),
     shortcutPath,
     aumid: null,
+    iconLocation: null,
     notifierSetting: null,
     error: null,
   };
@@ -87,14 +113,22 @@ export async function queryAumidStatus(
   const result = await runPowerShell({ script, timeoutMs: 6000 });
 
   const out = result.stdout.trim();
-  if (out === "MISSING" || out === "EMPTY") {
-    return status;
-  }
-  if (out.startsWith("AUMID:")) {
-    status.aumid = out.slice("AUMID:".length).trim();
-  } else if (out.startsWith("ERROR:")) {
-    status.error = out;
-    logger.warn("AUMID query failed", { stdout: out, stderr: result.stderr });
+  if (out === "MISSING") return status;
+
+  // The query script emits one fact per line (AUMID:/ICON:/ERROR:), so parse
+  // line by line. Empty values (e.g. `AUMID:` with nothing after) stay null.
+  for (const rawLine of out.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line.startsWith("AUMID:")) {
+      const value = line.slice("AUMID:".length).trim();
+      status.aumid = value.length > 0 ? value : null;
+    } else if (line.startsWith("ICON:")) {
+      const value = line.slice("ICON:".length).trim();
+      status.iconLocation = value.length > 0 ? value : null;
+    } else if (line.startsWith("ERROR:")) {
+      status.error = line;
+      logger.warn("AUMID query failed", { stdout: out, stderr: result.stderr });
+    }
   }
   return status;
 }
@@ -115,9 +149,13 @@ export async function registerAumid(options: RegisterAumidOptions): Promise<Regi
 
   const iconPath = options.iconPath ?? detectIconPath(targetPath);
 
+  // Skip the rewrite only when BOTH the AUMID and the icon already match.
+  // Checking the icon too means existing users (whose shortcut still points at
+  // node.exe) get the new Ringly icon applied on the next `ringly init`,
+  // instead of being skipped forever because the AUMID alone was correct.
   const current = await queryAumidStatus(shortcutPath);
-  if (current.aumid === options.appId) {
-    logger.info("AUMID already registered; skipping rewrite", { aumid: options.appId });
+  if (current.aumid === options.appId && iconMatches(current.iconLocation, iconPath)) {
+    logger.info("AUMID + icon already correct; skipping rewrite", { aumid: options.appId });
     return {
       ok: true,
       notifierSetting: current.notifierSetting,

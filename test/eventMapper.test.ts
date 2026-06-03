@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { mapEvent } from "../src/core/eventMapper.js";
 import { createTranslator } from "../src/core/translator.js";
-import type { ClaudeHookEventName, ClaudeHookPayload } from "../src/core/types.js";
+import type { ClaudeHookEventName, ClaudeHookPayload, TaskProgress } from "../src/core/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, "fixtures");
@@ -19,9 +19,10 @@ function runMap(
   payload: ClaudeHookPayload,
   event: ClaudeHookEventName,
   language: "pt-BR" | "en-US" = "pt-BR",
+  progress?: TaskProgress,
 ) {
   const translator = createTranslator(language);
-  return mapEvent({ payload, event, translator, soundEnabled: true });
+  return mapEvent({ payload, event, translator, soundEnabled: true, progress });
 }
 
 describe("eventMapper - Notification event", () => {
@@ -157,6 +158,60 @@ describe("eventMapper - Task events (taskNamed)", () => {
   it("TaskCompleted falls back to the generic body when no task text is present", () => {
     const intent = runMap({ hook_event_name: "TaskCompleted", cwd: "C:/foo/bar" }, "TaskCompleted");
     expect(intent.body).toContain("Uma tarefa foi concluída");
+  });
+});
+
+describe("eventMapper - TaskCompleted progress counter", () => {
+  const payload: ClaudeHookPayload = {
+    hook_event_name: "TaskCompleted",
+    cwd: "C:/foo/NewsDev",
+    task_subject: "Refatorar o módulo de login",
+  };
+
+  it("appends the counter when total is trustworthy (pt-BR)", () => {
+    const intent = runMap(payload, "TaskCompleted", "pt-BR", { completed: 3, total: 10 });
+    expect(intent.body).toBe("NewsDev: ✓ Refatorar o módulo de login (3/10)");
+  });
+
+  it("appends the counter in en-US too", () => {
+    const intent = runMap(
+      { ...payload, task_subject: "Refactor the login module" },
+      "TaskCompleted",
+      "en-US",
+      { completed: 1, total: 4 },
+    );
+    expect(intent.body).toBe("NewsDev: ✓ Refactor the login module (1/4)");
+  });
+
+  it("hides the counter when total is 1 (uninformative)", () => {
+    const intent = runMap(payload, "TaskCompleted", "pt-BR", { completed: 1, total: 1 });
+    expect(intent.body).toBe("NewsDev: ✓ Refatorar o módulo de login");
+    expect(intent.body).not.toContain("(");
+  });
+
+  it("hides the counter when total is below completed (inconsistent)", () => {
+    const intent = runMap(payload, "TaskCompleted", "pt-BR", { completed: 3, total: 2 });
+    expect(intent.body).toBe("NewsDev: ✓ Refatorar o módulo de login");
+  });
+
+  it("shows the plain named body when no progress is supplied (no regression)", () => {
+    const intent = runMap(payload, "TaskCompleted", "pt-BR");
+    expect(intent.body).toBe("NewsDev: ✓ Refatorar o módulo de login");
+  });
+
+  it("never adds a counter to TaskCreated even if progress is passed", () => {
+    const intent = runMap(
+      {
+        hook_event_name: "TaskCreated",
+        cwd: "C:/foo/NewsDev",
+        task_subject: "Escrever testes do parser",
+      },
+      "TaskCreated",
+      "pt-BR",
+      { completed: 2, total: 9 },
+    );
+    expect(intent.body).toContain("Nova tarefa: Escrever testes do parser");
+    expect(intent.body).not.toContain("(2/9)");
   });
 });
 

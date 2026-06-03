@@ -16,11 +16,14 @@ export default defineConfig([
     shims: true,
   },
   {
-    // Standalone ESM build of the event registry, consumed at build time by
-    // `scripts/gen-dispatch-data.mjs` to generate the plugin's data-only
-    // dispatch mirror (`plugin/hooks/dispatch.data.mjs`) and `hooks.json`.
-    // `events.ts` is pure (no fs), so this stays tiny.
-    entry: { events: "src/core/events.ts" },
+    // Standalone ESM builds consumed at build time by scripts (not shipped on
+    // any hot path):
+    //   - `events`: the event registry, read by `scripts/gen-dispatch-data.mjs`
+    //     to generate the plugin's dispatch mirror + `hooks.json`.
+    //   - `ico`: the pure ICO packer, read by `scripts/gen-icon.mjs` to build
+    //     `plugin/assets/ringly.ico`.
+    // Both modules are pure (no fs), so this stays tiny.
+    entry: { events: "src/core/events.ts", ico: "src/platform/windows/ico.ts" },
     format: ["esm"],
     target: "node20",
     platform: "node",

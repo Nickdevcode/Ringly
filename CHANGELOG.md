@@ -5,6 +5,62 @@
 
 ---
 
+## [0.8.0] — 2026-06-02
+
+### 🇧🇷 Português
+
+**Novidades**
+
+- **O ícone do canto da notificação agora é o do Ringly, não mais o do Node** (`src/platform/windows/icon.ts`, `aumid.ts`, `ps-templates.ts`, novo `scripts/gen-icon.mjs` + `src/platform/windows/ico.ts`, novo asset `plugin/assets/ringly.ico`). Aquele logozinho verde do Node que aparecia no topo do toast vinha do atalho do Menu Iniciar (`Claude Code.lnk`), que estava registrado usando o ícone do `node.exe`. Agora o Ringly gera um `ringly.ico` (as ondas concêntricas ciano da marca, iguais ao favicon do site) e registra o atalho apontando pra ele. A imagem grande **dentro** do toast continua a mesma (a estrela). O `.ico` é gerado no Windows via PowerShell + `System.Drawing` (sem dependência nova) e vem commitado no pacote.
+- **A notificação de tarefa concluída ganhou um contador `concluídas/total`** (`src/core/sessionProgress.ts`, `eventMapper.ts`, `notifier.ts`, `src/locales/*.json`). Agora, quando o Claude Code marca um item da checklist de trabalho como concluído, o toast mostra por exemplo `✓ Refatorar login (3/10)` — o nome da tarefa **e** quantas você já concluiu nesta sessão. O número de concluídas é sempre exato (o Ringly conta os `task_id` distintos por `session_id`). O total é uma **estimativa** (o maior `task_id` visto), porque o Claude Code não envia um total no evento — então o contador é omitido quando o total ainda é indeterminado (ex: só uma tarefa vista) ou inconsistente, pra nunca mostrar um número que engane.
+
+**Mudado**
+
+- **Quem já tinha o Ringly instalado: rode `ringly init` uma vez para aplicar o ícone novo.** O registro do atalho passou a comparar também o ícone atual — antes ele pulava o re-registro sempre que o AUMID já existia, o que deixaria o ícone do Node pra sempre. Agora, se o ícone do atalho divergir do `ringly.ico`, o `ringly init` reescreve o atalho. Sem comando novo.
+- **A notificação de fim de resposta (`Stop`) continua igual.** Só o evento de tarefa concluída (`TaskCompleted`) ganhou o contador.
+
+**Detalhes técnicos**
+
+- Estado por sessão guardado num arquivo `session-progress.json` no diretório de dados do plugin, escrito de forma atômica e podado por TTL (6h) — mesmo padrão do throttle, sem inflar uma segunda cadeia pesada no hook (o `env-paths` segue em 1 ocorrência no bundle). O campo `task_id` do payload passou a ser lido (`types.ts`, `payloadGuards.ts`).
+- O empacotador de `.ico` (`packIco`) embute PNGs em 6 tamanhos (16/32/48/64/128/256) num container ICO; é puro e coberto por testes (validação do header binário sem depender do Windows).
+
+**Testes**
+
+- **+45 testes novos** (de 223 para 268). Cobrem o estado por sessão (`sessionProgress.test.ts`), o contador no mapper e no notifier (incluindo as regras de quando esconder), a coerção de `task_id` (`payloadGuards.test.ts`), o empacotamento do `.ico` (`ico.test.ts`), a resolução do `ringly.ico` e o casamento de ícones (`icon.test.ts`), e a query estendida de AUMID que lê o `IconLocation` (`psTemplates.test.ts`).
+
+**Notas pra quem tá vindo da v0.7.1**
+
+- **Nada quebra.** Seu `~/.claude/settings.json` segue idêntico e os defaults dos eventos não mudaram. As duas mudanças visíveis: o ícone do canto vira o do Ringly (depois de um `ringly init`) e a tarefa concluída passa a mostrar o contador.
+- O contador só aparece quando a notificação de **tarefa concluída** está ligada (ela é opcional/off por padrão, como antes).
+
+### 🇺🇸 English
+
+**Added**
+
+- **The notification's corner icon is now Ringly's, not Node's** (`src/platform/windows/icon.ts`, `aumid.ts`, `ps-templates.ts`, new `scripts/gen-icon.mjs` + `src/platform/windows/ico.ts`, new asset `plugin/assets/ringly.ico`). The little green Node logo at the top of the toast came from the Start Menu shortcut (`Claude Code.lnk`), which was registered using `node.exe`'s icon. Ringly now generates a `ringly.ico` (the brand's concentric cyan rings, matching the site favicon) and registers the shortcut to point at it. The large image **inside** the toast is unchanged (the star). The `.ico` is generated on Windows via PowerShell + `System.Drawing` (no new dependency) and ships committed in the package.
+- **The task-completed notification now has a `completed/total` counter** (`src/core/sessionProgress.ts`, `eventMapper.ts`, `notifier.ts`, `src/locales/*.json`). When Claude Code marks a work-checklist item complete, the toast now reads e.g. `✓ Refactor login (3/10)` — the task name **and** how many you've completed this session. The completed count is always exact (Ringly counts distinct `task_id`s per `session_id`). The total is an **estimate** (the highest `task_id` seen), since Claude Code sends no total in the event — so the counter is omitted while the total is still undetermined (e.g. only one task seen) or inconsistent, never showing a misleading number.
+
+**Changed**
+
+- **Already had Ringly installed? Run `ringly init` once to apply the new icon.** Shortcut registration now also compares the current icon — it previously skipped the rewrite whenever the AUMID already existed, which would keep Node's icon forever. Now, if the shortcut's icon differs from `ringly.ico`, `ringly init` rewrites the shortcut. No new command.
+- **The end-of-response (`Stop`) notification is unchanged.** Only the task-completed event (`TaskCompleted`) gained the counter.
+
+**Technical details**
+
+- Per-session state lives in a `session-progress.json` file in the plugin data dir, written atomically and pruned by TTL (6h) — same pattern as the throttle, without adding a second heavy dependency chain to the hook (`env-paths` stays at one occurrence in the bundle). The payload's `task_id` field is now read (`types.ts`, `payloadGuards.ts`).
+- The `.ico` packer (`packIco`) embeds PNGs at 6 sizes (16/32/48/64/128/256) into an ICO container; it's pure and unit-tested (binary-header validation without needing Windows).
+
+**Tests**
+
+- **+45 new tests** (from 223 to 268), covering per-session state, the counter in the mapper and notifier (including the hide rules), `task_id` coercion, the `.ico` packing, `ringly.ico` resolution and icon matching, and the extended AUMID query that reads `IconLocation`.
+
+**Notes if you're coming from v0.7.1**
+
+- **Nothing breaks.** Your `~/.claude/settings.json` is identical and event defaults are unchanged. The two visible changes: the corner icon becomes Ringly's (after a `ringly init`) and task-completed now shows the counter.
+- The counter only shows when the **task-completed** notification is enabled (it's optional/off by default, as before).
+
+---
+
 ## [0.7.1] — 2026-06-02
 
 ### 🇧🇷 Português

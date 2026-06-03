@@ -110,4 +110,21 @@ describe("buildAumidQueryScript", () => {
     });
     expect(script).toContain("'C:\\It''s\\shortcut.lnk'");
   });
+
+  it("queries the AUMID via Get-StartApps and emits an AUMID: line", () => {
+    const script = buildAumidQueryScript({ shortcutPath: "C:\\s.lnk" });
+    expect(script).toContain("Get-StartApps");
+    expect(script).toContain("'AUMID:'");
+  });
+
+  it("reads the shortcut IconLocation and emits an ICON: line", () => {
+    const script = buildAumidQueryScript({ shortcutPath: "C:\\s.lnk" });
+    expect(script).toContain(".IconLocation");
+    expect(script).toContain("'ICON:'");
+  });
+
+  it("still reports MISSING when the shortcut is absent", () => {
+    const script = buildAumidQueryScript({ shortcutPath: "C:\\s.lnk" });
+    expect(script).toContain("'MISSING'");
+  });
 });

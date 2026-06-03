@@ -231,6 +231,18 @@ export interface AumidQueryParams {
   shortcutPath: string;
 }
 
+/**
+ * Builds the PowerShell script that reports a shortcut's AUMID and its current
+ * icon. Output is line-oriented so `queryAumidStatus` can parse each fact
+ * independently:
+ *   - `MISSING`                  — the shortcut file does not exist.
+ *   - `AUMID:<id>` / `AUMID:`    — the registered AUMID (empty if none).
+ *   - `ICON:<location>` / `ICON:`— the shortcut's `IconLocation` (empty if none).
+ *   - `ERROR:<message>`          — an unexpected failure.
+ *
+ * The icon line lets the caller detect a stale icon (e.g. still pointing at
+ * `node.exe`) and force a rewrite even when the AUMID already matches.
+ */
 export function buildAumidQueryScript(params: AumidQueryParams): string {
   const esc = (s: string) => s.replace(/'/g, "''");
   return `
@@ -252,13 +264,16 @@ try {
             break
         }
     }
-    if ($matched) {
-        Write-Output ('AUMID:' + $matched)
-    } else {
-        Write-Output 'EMPTY'
-    }
+    Write-Output ('AUMID:' + $matched)
 } catch {
     Write-Output ('ERROR:' + $_.Exception.Message)
+}
+
+try {
+    $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($ShortcutPath)
+    Write-Output ('ICON:' + $sc.IconLocation)
+} catch {
+    Write-Output 'ICON:'
 }
 
 exit 0

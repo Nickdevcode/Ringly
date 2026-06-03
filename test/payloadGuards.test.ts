@@ -70,6 +70,26 @@ describe("coerceClaudeHookPayload", () => {
     expect((result as Record<string, unknown>).malicious_field).toBeUndefined();
   });
 
+  it("keeps task_id for task events", () => {
+    const result = coerceClaudeHookPayload({
+      hook_event_name: "TaskCompleted",
+      task_id: "7",
+      task_subject: "Refactor login",
+    });
+    expect(result.task_id).toBe("7");
+    expect(result.task_subject).toBe("Refactor login");
+  });
+
+  it("truncates an oversized task_id to 64 chars", () => {
+    const result = coerceClaudeHookPayload({ task_id: "1".repeat(200) });
+    expect(result.task_id?.length).toBe(64);
+  });
+
+  it("drops a non-string or empty task_id", () => {
+    expect(coerceClaudeHookPayload({ task_id: 7 }).task_id).toBeUndefined();
+    expect(coerceClaudeHookPayload({ task_id: "" }).task_id).toBeUndefined();
+  });
+
   it("handles a realistic full payload", () => {
     const result = coerceClaudeHookPayload({
       hook_event_name: "StopFailure",

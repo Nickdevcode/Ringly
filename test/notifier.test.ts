@@ -140,3 +140,89 @@ describe("notify", () => {
     expect(dispatchSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("notify - TaskCompleted progress counter", () => {
+  let dataDir: string;
+  const originalDataDir = process.env["CLAUDE_PLUGIN_DATA"];
+  const taskConfig: RinglyConfig = {
+    ...DEFAULT_CONFIG,
+    language: "pt-BR",
+    events: { ...DEFAULT_CONFIG.events, taskCreated: true, taskCompleted: true },
+  };
+
+  // Body of the most recent dispatched intent.
+  const lastBody = () => {
+    const calls = dispatchSpy.mock.calls;
+    return (calls[calls.length - 1]?.[0] as { body: string }).body;
+  };
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), "ringly-progress-notify-"));
+    process.env["CLAUDE_PLUGIN_DATA"] = dataDir;
+    dispatchSpy.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+    if (originalDataDir === undefined) delete process.env["CLAUDE_PLUGIN_DATA"];
+    else process.env["CLAUDE_PLUGIN_DATA"] = originalDataDir;
+  });
+
+  it("shows the counter after seeing two created tasks and completing one", async () => {
+    await notify({
+      event: "TaskCreated",
+      payload: { cwd: "/x/App", session_id: "s1", task_id: "1", task_subject: "A" },
+      config: taskConfig,
+    });
+    await notify({
+      event: "TaskCreated",
+      payload: { cwd: "/x/App", session_id: "s1", task_id: "2", task_subject: "B" },
+      config: taskConfig,
+    });
+    await notify({
+      event: "TaskCompleted",
+      payload: { cwd: "/x/App", session_id: "s1", task_id: "1", task_subject: "A" },
+      config: taskConfig,
+    });
+    expect(lastBody()).toBe("App: ✓ A (1/2)");
+  });
+
+  it("never shows a counter on TaskCreated", async () => {
+    await notify({
+      event: "TaskCreated",
+      payload: { cwd: "/x/App", session_id: "s1", task_id: "1", task_subject: "A" },
+      config: taskConfig,
+    });
+    expect(lastBody()).not.toContain("(");
+  });
+
+  it("dedupes a repeated completion of the same task id (counter stays 1/2)", async () => {
+    await notify({
+      event: "TaskCreated",
+      payload: { cwd: "/x/App", session_id: "s1", task_id: "2", task_subject: "B" },
+      config: taskConfig,
+    });
+    await notify({
+      event: "TaskCompleted",
+      payload: { cwd: "/x/App", session_id: "s1", task_id: "1", task_subject: "A" },
+      config: taskConfig,
+    });
+    // Re-complete the SAME id with a distinct subject so the throttle dedup key
+    // differs and the toast actually dispatches again.
+    await notify({
+      event: "TaskCompleted",
+      payload: { cwd: "/x/App", session_id: "s1", task_id: "1", task_subject: "A (retry)" },
+      config: taskConfig,
+    });
+    expect(lastBody()).toBe("App: ✓ A (retry) (1/2)");
+  });
+
+  it("omits the counter when task_id is absent", async () => {
+    await notify({
+      event: "TaskCompleted",
+      payload: { cwd: "/x/App", session_id: "s1", task_subject: "A" },
+      config: taskConfig,
+    });
+    expect(lastBody()).toBe("App: ✓ A");
+  });
+});

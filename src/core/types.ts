@@ -33,6 +33,23 @@ export interface ClaudeHookPayload {
   task_subject?: string;
   /** TaskCreated/TaskCompleted: optional longer task description (`task_description`). */
   task_description?: string;
+  /**
+   * TaskCreated/TaskCompleted: per-session sequential task identifier ("1",
+   * "2", …). Claude Code does NOT send a task total, so the progress counter
+   * (see `TaskProgress`) infers it from the highest id seen in a session.
+   */
+  task_id?: string;
+}
+
+/**
+ * Per-session task progress shown in the `TaskCompleted` toast (e.g. "3/10").
+ * `completed` is exact (distinct task ids completed this session); `total` is a
+ * best-effort estimate (the highest task id seen), since the hook payload
+ * carries no task total. See `core/sessionProgress.ts`.
+ */
+export interface TaskProgress {
+  completed: number;
+  total: number;
 }
 
 export interface NotificationIntent {

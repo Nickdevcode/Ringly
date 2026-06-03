@@ -6,6 +6,7 @@ import type {
   ClaudeHookPayload,
   NotificationIntent,
   NotificationSeverity,
+  TaskProgress,
   ToastSoundName,
 } from "./types.js";
 
@@ -36,16 +37,22 @@ export interface MapEventOptions {
   translator: Translator;
   soundEnabled: boolean;
   projectDirOverride?: string | undefined;
+  /**
+   * Per-session task progress, resolved by the caller (notifier) for
+   * `TaskCompleted`. Optional and absent on every other path (e.g. `ringly
+   * test`), so the body falls back to the plain named form.
+   */
+  progress?: TaskProgress | undefined;
 }
 
 export function mapEvent(options: MapEventOptions): NotificationIntent {
-  const { payload, event, translator, soundEnabled, projectDirOverride } = options;
+  const { payload, event, translator, soundEnabled, projectDirOverride, progress } = options;
 
   const descriptor: EventDescriptor = EVENT_BY_NAME[event];
   const projectName = extractProjectName(payload.cwd, projectDirOverride);
   const prefix = projectName ? `${projectName}: ` : "";
 
-  const built = buildEventBody({ event, payload, translator, prefix });
+  const built = buildEventBody({ event, payload, translator, prefix, progress });
 
   return {
     event,
@@ -71,6 +78,7 @@ interface BuildEventBodyOptions {
   payload: ClaudeHookPayload;
   translator: Translator;
   prefix: string;
+  progress?: TaskProgress | undefined;
 }
 
 /**
@@ -80,12 +88,12 @@ interface BuildEventBodyOptions {
  * A descriptor with no resolver yields the plain `prefix + t(bodyKey)`.
  */
 function buildEventBody(options: BuildEventBodyOptions): EventBody {
-  const { event, payload, translator, prefix } = options;
+  const { event, payload, translator, prefix, progress } = options;
   const descriptor = EVENT_BY_NAME[event];
 
   return {
     title: translator.t(descriptor.titleKey),
-    body: `${prefix}${resolveBody(descriptor, payload, translator)}`,
+    body: `${prefix}${resolveBody(descriptor, payload, translator, progress)}`,
     severity: descriptor.severity,
     sound: descriptor.sound,
   };
@@ -95,6 +103,7 @@ function resolveBody(
   descriptor: EventDescriptor,
   payload: ClaudeHookPayload,
   translator: Translator,
+  progress?: TaskProgress | undefined,
 ): string {
   switch (descriptor.resolver) {
     case "notification":
@@ -104,7 +113,7 @@ function resolveBody(
     case "agentNamed":
       return resolveAgentNamedBody(descriptor, payload, translator);
     case "taskNamed":
-      return resolveTaskNamedBody(descriptor, payload, translator);
+      return resolveTaskNamedBody(descriptor, payload, translator, progress);
     case "compact":
       return resolveCompactBody(descriptor, payload, translator);
     default:
@@ -189,6 +198,13 @@ function resolveAgentNamedBody(
  * sibling with the trailing segment swapped to `.named` and a `{task}`
  * placeholder — e.g. `body.taskCompleted.fallback` → `body.taskCompleted.named`.
  *
+ * When `progress` is present (only the notifier supplies it, only for
+ * `TaskCompleted`) and trustworthy, the `<base>.named_counted` sibling adds the
+ * "{completed}/{total}" counter. We deliberately suppress the counter when the
+ * total is uninformative or inconsistent — `total <= 1` (we've only ever seen
+ * one task, so "1/1" is noise) or `total < completed` (a deleted-task artifact)
+ * — since the total is a best-effort estimate, not a value the hook reports.
+ *
  * Defensive on purpose: if a future Claude Code version renames the field, we
  * simply fall through to the generic body instead of breaking the toast.
  */
@@ -196,9 +212,20 @@ function resolveTaskNamedBody(
   descriptor: EventDescriptor,
   payload: ClaudeHookPayload,
   translator: Translator,
+  progress?: TaskProgress | undefined,
 ): string {
   const task = (payload.task_subject ?? payload.task_description)?.trim();
   if (task && task.length > 0) {
+    if (progress && progress.total > 1 && progress.total >= progress.completed) {
+      const countedKey = `${baseKeyFor(descriptor.bodyKey)}.named_counted`;
+      if (translator.has(countedKey)) {
+        return translator.t(countedKey, {
+          task,
+          completed: progress.completed,
+          total: progress.total,
+        });
+      }
+    }
     return translator.t(namedKeyFor(descriptor.bodyKey), { task });
   }
   return translator.t(descriptor.bodyKey);
