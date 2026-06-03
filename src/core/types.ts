@@ -34,18 +34,21 @@ export interface ClaudeHookPayload {
   /** TaskCreated/TaskCompleted: optional longer task description (`task_description`). */
   task_description?: string;
   /**
-   * TaskCreated/TaskCompleted: per-session sequential task identifier ("1",
-   * "2", …). Claude Code does NOT send a task total, so the progress counter
-   * (see `TaskProgress`) infers it from the highest id seen in a session.
+   * TaskCreated/TaskCompleted: session-global sequential task identifier ("1",
+   * "2", …). It increments per creation and does NOT reset between checklists.
+   * Claude Code sends no task total, so the progress counter (see
+   * `TaskProgress`) derives one per checklist in `core/sessionProgress.ts`.
    */
   task_id?: string;
 }
 
 /**
- * Per-session task progress shown in the `TaskCompleted` toast (e.g. "3/10").
- * `completed` is exact (distinct task ids completed this session); `total` is a
- * best-effort estimate (the highest task id seen), since the hook payload
- * carries no task total. See `core/sessionProgress.ts`.
+ * Per-session task progress shown in the `TaskCompleted` toast (e.g. "3/6").
+ * Both numbers describe the CURRENT checklist, not the whole session: `completed`
+ * is exact (distinct ids completed in this checklist) and `total` is how many
+ * items the checklist was created with. The hook payload carries no task total
+ * and `task_id` never resets between checklists, so the checklist boundary is
+ * inferred (a creation following a completion). See `core/sessionProgress.ts`.
  */
 export interface TaskProgress {
   completed: number;

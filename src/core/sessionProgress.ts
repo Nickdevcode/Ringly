@@ -1,9 +1,20 @@
 /**
  * Per-session task progress tracking for the `TaskCompleted` toast counter
- * (e.g. "3/10"). Claude Code's hook payload carries a per-session sequential
- * `task_id` but NO task total, so we keep a tiny bit of state ourselves: how
- * many distinct task ids have completed in a session (the exact numerator) and
- * the highest task id seen (a best-effort denominator).
+ * (e.g. "3/6"). Claude Code's hook payload carries a per-session sequential
+ * `task_id` but NO task total and NO grouping — and crucially `task_id` does
+ * NOT reset between checklists: it keeps counting up across the whole session.
+ * So a naive "highest id seen" total mixes unrelated checklists together (a
+ * second checklist of 2 items, created after 6 earlier tasks, would show a
+ * total of 8). We instead track the *current checklist* and reset it when a new
+ * one begins.
+ *
+ * How a new checklist is detected: Claude Code creates a checklist as a burst
+ * of `TaskCreated` events, then marks items complete one by one. A `TaskCreated`
+ * that arrives *after* any completion in the session is the start of a NEW
+ * checklist — so we reset the group's counters then. This makes the counter
+ * track exactly the list the user sees on screen: it counts 1/6 … 6/6, and a
+ * fresh batch restarts at 1/N. (Confirmed against real captured hook payloads:
+ * `task_id` is a session-global sequential counter, never reset per checklist.)
  *
  * Modeled on `throttle.ts`: a small JSON file in the plugin data dir, written
  * atomically, read defensively, pruned by TTL so it can't grow unbounded.
@@ -20,6 +31,9 @@ import type { TaskProgress } from "./types.js";
 
 const PROGRESS_FILENAME = "session-progress.json";
 
+/** Which kind of task event we're folding in. */
+export type TaskEventKind = "created" | "completed";
+
 /**
  * How long a session's progress is kept after its last update. Sessions can
  * run for hours, so this is generous; the prune only reclaims space from
@@ -28,10 +42,22 @@ const PROGRESS_FILENAME = "session-progress.json";
 export const DEFAULT_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 
 interface SessionEntry {
-  /** Distinct numeric task ids that have completed (the exact numerator). */
+  /**
+   * Distinct task ids CREATED in the current checklist (the denominator/total).
+   * Reset when a new checklist begins (a creation after a completion).
+   */
+  createdIds: number[];
+  /**
+   * Distinct task ids COMPLETED in the current checklist (the exact numerator).
+   * Reset alongside `createdIds`.
+   */
   completedIds: number[];
-  /** Highest task id seen this session (the best-effort total/denominator). */
-  maxId: number;
+  /**
+   * Whether a completion has been seen since the current checklist began. The
+   * next `TaskCreated` after a completion starts a fresh checklist (resets the
+   * two id lists). Persisted so the detection survives across hook processes.
+   */
+  sawCompletion: boolean;
   /** Epoch-ms of the last update — drives TTL pruning. */
   updatedAt: number;
 }
@@ -42,41 +68,70 @@ interface ProgressRecord {
 }
 
 function emptyEntry(now: number): SessionEntry {
-  return { completedIds: [], maxId: 0, updatedAt: now };
+  return { createdIds: [], completedIds: [], sawCompletion: false, updatedAt: now };
+}
+
+function addUnique(ids: number[], id: number): number[] {
+  return ids.includes(id) ? ids : [...ids, id];
 }
 
 /**
  * Pure state transition (mirrors `throttle.ts`'s `shouldFire`): folds one task
- * event into a session entry, returning a NEW entry (no mutation). A finite,
- * positive `taskId` raises `maxId`; a completed task is added to `completedIds`
- * once (deduped) so re-fires of the same id never double-count. `updatedAt` is
- * always bumped to `now`. Non-finite ids are ignored entirely.
+ * event into a session entry, returning a NEW entry (no mutation).
+ *
+ *  - A `created` event that arrives after a completion (`sawCompletion`) starts
+ *    a NEW checklist: both id lists reset before the new id is recorded. It then
+ *    joins `createdIds` (raising the total).
+ *  - A `completed` event records the id in `completedIds` once (deduped, so
+ *    re-fires never double-count) and sets `sawCompletion`. It also ensures the
+ *    id is in `createdIds` — a task can complete without our having seen its
+ *    creation (e.g. created before the toast was enabled), and the total must
+ *    never sit below the numerator.
+ *
+ * `updatedAt` is always bumped to `now`. Non-finite/non-positive ids are
+ * ignored (the lists are unchanged) but still bump `updatedAt`.
  */
 export function applyTask(
   entry: SessionEntry,
   taskId: number,
-  completed: boolean,
+  kind: TaskEventKind,
   now: number,
 ): SessionEntry {
   const hasValidId = Number.isFinite(taskId) && taskId > 0;
-  const maxId = hasValidId ? Math.max(entry.maxId, taskId) : entry.maxId;
-
-  let completedIds = entry.completedIds;
-  if (completed && hasValidId && !completedIds.includes(taskId)) {
-    completedIds = [...completedIds, taskId];
+  if (!hasValidId) {
+    return { ...entry, updatedAt: now };
   }
 
-  return { completedIds, maxId, updatedAt: now };
+  if (kind === "created") {
+    // A creation following a completion marks the boundary of a new checklist.
+    const startingNewGroup = entry.sawCompletion;
+    const createdBase = startingNewGroup ? [] : entry.createdIds;
+    return {
+      createdIds: addUnique(createdBase, taskId),
+      completedIds: startingNewGroup ? [] : entry.completedIds,
+      sawCompletion: false,
+      updatedAt: now,
+    };
+  }
+
+  // kind === "completed"
+  return {
+    createdIds: addUnique(entry.createdIds, taskId),
+    completedIds: addUnique(entry.completedIds, taskId),
+    sawCompletion: true,
+    updatedAt: now,
+  };
 }
 
 /**
  * Pure projection: turns a session entry into the `{ completed, total }` the
- * toast shows. `completed` is exact; `total` is clamped to never be below
- * `completed` (so deleted tasks can't produce a nonsensical "3/2").
+ * toast shows for the CURRENT checklist. `completed` is exact; `total` is
+ * clamped to never be below `completed` (so it can't produce a nonsensical
+ * "3/2" if a completion outran the creations we saw).
  */
 export function deriveProgress(entry: SessionEntry): TaskProgress {
   const completed = entry.completedIds.length;
-  return { completed, total: Math.max(entry.maxId, completed) };
+  return { completed, total: Math.max(entry.createdIds.length, completed) };
 }
 
 export function readProgressRecord(dataDir: string): ProgressRecord {
@@ -110,7 +165,7 @@ export function recordTask(
   dataDir: string,
   sessionId: string,
   taskIdRaw: string,
-  completed: boolean,
+  kind: TaskEventKind,
   now: number = Date.now(),
   ttlMs: number = DEFAULT_SESSION_TTL_MS,
 ): TaskProgress | undefined {
@@ -119,7 +174,7 @@ export function recordTask(
 
   try {
     const record = readProgressRecord(dataDir);
-    const next = applyTask(record.sessions[sessionId] ?? emptyEntry(now), taskId, completed, now);
+    const next = applyTask(record.sessions[sessionId] ?? emptyEntry(now), taskId, kind, now);
     record.sessions[sessionId] = next;
     pruneStale(record, now, ttlMs);
     atomicWriteFileSync(join(dataDir, PROGRESS_FILENAME), JSON.stringify(record));

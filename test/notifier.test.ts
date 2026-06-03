@@ -187,6 +187,36 @@ describe("notify - TaskCompleted progress counter", () => {
     expect(lastBody()).toBe("App: ✓ A (1/2)");
   });
 
+  it("resets the counter for a new checklist created later (regression: 1/2, not 3/8)", async () => {
+    // End-to-end replay of the reported bug: a six-item checklist, two
+    // completions, then a fresh batch whose ids keep climbing (7,8). The new
+    // batch must restart at 1/N — never accumulate into the session-wide total.
+    const created = (id: string) =>
+      notify({
+        event: "TaskCreated",
+        payload: { cwd: "/x/App", session_id: "s1", task_id: id, task_subject: `t${id}` },
+        config: taskConfig,
+      });
+    const completed = (id: string) =>
+      notify({
+        event: "TaskCompleted",
+        payload: { cwd: "/x/App", session_id: "s1", task_id: id, task_subject: `done${id}` },
+        config: taskConfig,
+      });
+
+    for (const id of ["1", "2", "3", "4", "5", "6"]) await created(id);
+    await completed("1");
+    expect(lastBody()).toBe("App: ✓ done1 (1/6)");
+    await completed("2");
+    expect(lastBody()).toBe("App: ✓ done2 (2/6)");
+
+    // New checklist of two items.
+    await created("7");
+    await created("8");
+    await completed("7");
+    expect(lastBody()).toBe("App: ✓ done7 (1/2)");
+  });
+
   it("never shows a counter on TaskCreated", async () => {
     await notify({
       event: "TaskCreated",

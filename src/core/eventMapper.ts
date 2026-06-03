@@ -200,10 +200,12 @@ function resolveAgentNamedBody(
  *
  * When `progress` is present (only the notifier supplies it, only for
  * `TaskCompleted`) and trustworthy, the `<base>.named_counted` sibling adds the
- * "{completed}/{total}" counter. We deliberately suppress the counter when the
- * total is uninformative or inconsistent — `total <= 1` (we've only ever seen
- * one task, so "1/1" is noise) or `total < completed` (a deleted-task artifact)
- * — since the total is a best-effort estimate, not a value the hook reports.
+ * "{completed}/{total}" counter. Both numbers describe the CURRENT checklist
+ * (see `sessionProgress.ts`): `completed` is exact, `total` is how many items
+ * that checklist was created with. We deliberately suppress the counter when
+ * the total is uninformative or inconsistent — `total <= 1` (a single-item
+ * checklist, so "1/1" is noise) or `total < completed` (which the clamp should
+ * already prevent) — since the hook reports no total of its own.
  *
  * Defensive on purpose: if a future Claude Code version renames the field, we
  * simply fall through to the generic body instead of breaking the toast.

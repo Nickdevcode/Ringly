@@ -5,6 +5,48 @@
 
 ---
 
+## [0.8.1] — 2026-06-02
+
+### 🇧🇷 Português
+
+**Corrigido**
+
+- **O contador de tarefa concluída (`concluídas/total`) estava bugado e agora conta por checklist** (`src/core/sessionProgress.ts`, `notifier.ts`, `eventMapper.ts`, `types.ts`). Na v0.8.0 o número às vezes não aparecia na primeira tarefa, e o total inflava: com 6 tarefas, ao concluir a primeira de uma nova leva o toast mostrava algo como `3/8` em vez de `1/2`. **Causa:** o `task_id` que o Claude Code envia é um contador sequencial da **sessão inteira** — ele **não zera quando começa um novo checklist**. O contador antigo usava o maior `task_id` visto como total e somava todas as conclusões da sessão, então misturava checklists diferentes. **Agora** o Ringly rastreia o **checklist atual**: quando o Claude cria uma tarefa depois de já ter concluído alguma, isso marca o início de um novo checklist e o contador reseta. Resultado: você vê `1/6, 2/6, … 6/6`, e uma nova leva recomeça em `1/N` certinho. O número de concluídas continua exato; o total agora reflete o tamanho do checklist que está na sua tela.
+
+**Detalhes técnicos**
+
+- O estado por sessão (`session-progress.json`) passou a guardar o checklist corrente — os `task_id` criados (o total) e os concluídos (o numerador), mais um flag `sawCompletion` que detecta a virada de checklist (uma criação após uma conclusão). A função interna `applyTask` agora recebe o tipo do evento (`"created"`/`"completed"`) em vez de um booleano. Nenhuma dependência nova entrou no pacote — o bundle do hook continua do mesmo tamanho. Comportamento confirmado capturando o payload real dos hooks de tarefa: `task_id` é global da sessão e `TaskUpdate → in_progress` não dispara hook (só a conclusão dispara).
+- Caso raro (intercalar dois checklists, alternando entre eles antes de terminar o primeiro): o contador mostra um número aproximado porém coerente, em vez de esconder. No fluxo comum (terminar um checklist antes de abrir outro) fica exato.
+
+**Testes**
+
+- **+7 testes** (de 268 para 275): o agrupamento por checklist, o cenário exato do bug reproduzido ponta-a-ponta (`1/6, 2/6, 1/2`), dois checklists em sequência limpa, e a persistência da virada de checklist entre execuções do hook.
+
+**Notas pra quem tá vindo da v0.8.0**
+
+- **Nada quebra e não precisa de nenhum comando.** É só a lógica do contador que mudou; configs, ícone e os outros toasts seguem idênticos. O arquivo de estado antigo (se existir) é lido sem erro e simplesmente recomeça a contagem.
+
+### 🇺🇸 English
+
+**Fixed**
+
+- **The task-completed counter (`completed/total`) was buggy and now counts per checklist** (`src/core/sessionProgress.ts`, `notifier.ts`, `eventMapper.ts`, `types.ts`). In v0.8.0 the number sometimes didn't show on the first task, and the total inflated: with 6 tasks, completing the first item of a new batch showed something like `3/8` instead of `1/2`. **Cause:** the `task_id` Claude Code sends is a **session-wide** sequential counter — it does **not** reset when a new checklist starts. The old counter used the highest `task_id` seen as the total and summed every completion in the session, so it mixed separate checklists together. **Now** Ringly tracks the **current checklist**: when Claude creates a task after having completed one, that marks the start of a new checklist and the counter resets. Result: you see `1/6, 2/6, … 6/6`, and a fresh batch restarts at `1/N` correctly. The completed count stays exact; the total now reflects the size of the checklist on your screen.
+
+**Technical details**
+
+- Per-session state (`session-progress.json`) now stores the current checklist — the created `task_id`s (the total) and the completed ones (the numerator), plus a `sawCompletion` flag that detects the checklist boundary (a creation following a completion). The internal `applyTask` helper now takes the event kind (`"created"`/`"completed"`) instead of a boolean. No new dependency entered the package — the hook bundle stays the same size. Behavior confirmed by capturing the real task-hook payload: `task_id` is session-global and `TaskUpdate → in_progress` fires no hook (only completion does).
+- Rare case (interleaving two checklists, switching between them before finishing the first): the counter shows an approximate-but-consistent number instead of hiding. In the common flow (finishing one checklist before opening another) it's exact.
+
+**Tests**
+
+- **+7 tests** (from 268 to 275): per-checklist grouping, the exact bug scenario reproduced end-to-end (`1/6, 2/6, 1/2`), two checklists in clean sequence, and the checklist-boundary persisting across hook processes.
+
+**Notes if you're coming from v0.8.0**
+
+- **Nothing breaks and no command is needed.** Only the counter's logic changed; config, icon, and the other toasts are identical. The old state file (if any) is read without error and simply restarts its count.
+
+---
+
 ## [0.8.0] — 2026-06-02
 
 ### 🇧🇷 Português

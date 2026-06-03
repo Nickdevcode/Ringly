@@ -62,11 +62,12 @@ export async function notify(options: NotifyOptions): Promise<void> {
   if (descriptor.verbose) {
     const dataDir = await resolveDataDirForThrottle();
     if (dataDir) {
-      // Task events carry a per-session sequential `task_id`. We fold every
-      // task event into per-session progress state (so `maxId`/the total grows
-      // as tasks appear), but only surface the counter on `TaskCompleted`.
-      // Recorded BEFORE the throttle gate: a throttled completion must still
-      // count — throttling is anti-spam for the toast, not for the tally.
+      // Task events carry a session-global sequential `task_id`. We fold every
+      // task event into per-checklist progress state (creations grow the total;
+      // a creation after a completion starts a fresh checklist), but only
+      // surface the counter on `TaskCompleted`. Recorded BEFORE the throttle
+      // gate: a throttled completion must still count — throttling is anti-spam
+      // for the toast, not for the tally.
       let progress: TaskProgress | undefined;
       const { payload, event } = options;
       if (descriptor.resolver === "taskNamed" && payload.session_id && payload.task_id) {
@@ -76,7 +77,7 @@ export async function notify(options: NotifyOptions): Promise<void> {
             dataDir,
             payload.session_id,
             payload.task_id,
-            event === "TaskCompleted",
+            event === "TaskCompleted" ? "completed" : "created",
           );
           if (event === "TaskCompleted") progress = recorded;
         } catch {
