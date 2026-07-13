@@ -1,7 +1,7 @@
-import enUS from "../src/locales/en-US.json" with { type: "json" };
-import ptBR from "../src/locales/pt-BR.json" with { type: "json" };
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTranslator, detectSystemLanguage, resolveLanguage } from "../src/core/translator.js";
+import enUS from "../src/locales/en-US.json" with { type: "json" };
+import ptBR from "../src/locales/pt-BR.json" with { type: "json" };
 
 describe("locale parity", () => {
   it("pt-BR and en-US define exactly the same keys", () => {
