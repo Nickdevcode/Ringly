@@ -64,14 +64,17 @@ export const App: FC<AppProps> = ({
   const [, setAumid] = useState<RegisterAumidResult | null>(null);
 
   const finish = useCallback(
-    async (aumidResult: RegisterAumidResult | null) => {
+    async (aumidResult: RegisterAumidResult | null, statuslineOverride?: StatuslineConfig) => {
       const nextConfig: RinglyConfig = {
         ...initialConfig,
         language,
         events,
         sound: soundDebug.sound,
         debug: soundDebug.debug,
-        statusline,
+        // `statusline` state may still be stale on the tick that submits the
+        // StatuslinePicker (setState is async), so the picker hands us its value
+        // directly as an override. AUMID/other paths keep using the state.
+        statusline: statuslineOverride ?? statusline,
       };
       await onComplete(nextConfig, aumidResult);
       setStage("done");
@@ -122,7 +125,9 @@ export const App: FC<AppProps> = ({
             if (mode === "init" && isWindows && registerAumidFn) {
               setStage("aumid");
             } else {
-              finish(null).catch(() => exit());
+              // Pass `value` explicitly: the `statusline` state set above is not
+              // yet visible to `finish` on this tick (stale closure).
+              finish(null, value).catch(() => exit());
             }
           }}
         />

@@ -5,6 +5,38 @@
 
 ---
 
+## [0.9.1] — 2026-07-12
+
+### 🇧🇷 Português
+
+**Corrigido**
+
+- **A status line não ligava pelo `ringly config`.** Você ligava o interruptor mestre na tela "Status line", confirmava com Enter, mas nada aparecia — e o `settings.json` continuava com `statusline_enabled: false` e sem a chave `statusLine`. Causa: um _stale closure_ do React na TUI (`src/tui/App.tsx`). A tela do status line salvava o estado e finalizava no **mesmo tick**, e como `setState` do React é assíncrono, a função que persiste lia o valor **antigo** do toggle (ainda `false`). Como a instalação da `statusLine` só dispara na transição desligado→ligado, ela nunca rodava. Agora o valor recém-escolhido é passado direto para a finalização, sem depender do estado.
+
+**Testes**
+
+- **+1 teste de regressão** (de 333 para 334): renderiza a TUI de config inteira, liga o interruptor mestre, confirma, e garante que a finalização recebe `statusline.enabled: true`. Validado revertendo o fix (o teste falha sem ele). Introduz `ink-testing-library` como dependência de desenvolvimento para testar componentes da TUI.
+
+**Notas pra quem tá vindo da v0.9.0**
+
+- **Só uma correção — nada muda de comportamento.** Se você tentou ligar a status line na v0.9.0 e não apareceu, atualize, rode `ringly config` e ligue de novo: agora persiste de verdade. Setups que já estavam funcionando seguem idênticos.
+
+### 🇺🇸 English
+
+**Fixed**
+
+- **The status line wouldn't turn on from `ringly config`.** You flipped the master switch on the "Status line" screen, hit Enter, but nothing showed up — and `settings.json` still had `statusline_enabled: false` with no `statusLine` key. Cause: a React stale closure in the TUI (`src/tui/App.tsx`). The status line screen saved its state and finalized on the **same tick**, and because React's `setState` is async, the persisting function read the **old** toggle value (still `false`). Since installing the `statusLine` only fires on an off→on transition, it never ran. The freshly chosen value is now threaded straight into finalization instead of relying on state.
+
+**Tests**
+
+- **+1 regression test** (from 333 to 334): renders the full config TUI, turns the master switch on, confirms, and asserts finalization receives `statusline.enabled: true`. Verified by reverting the fix (the test fails without it). Adds `ink-testing-library` as a dev dependency for testing TUI components.
+
+**Notes coming from v0.9.0**
+
+- **Just a fix — no behavior changes.** If you tried enabling the status line on v0.9.0 and it didn't show, update, run `ringly config`, and enable it again: it now persists for real. Setups that already worked are unchanged.
+
+---
+
 ## [0.9.0] — 2026-07-12
 
 ### 🇧🇷 Português
