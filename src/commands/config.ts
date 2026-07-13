@@ -8,6 +8,7 @@ import {
 } from "../core/claudeSettings.js";
 import {
   ringlyConfigToPluginOptions,
+  syncStatuslineInstall,
   writeRinglyPluginOptions,
 } from "../core/claudeSettingsWrite.js";
 import { DEFAULT_CONFIG, loadConfig } from "../core/config.js";
@@ -36,6 +37,9 @@ export async function runConfig(): Promise<void> {
   }
 
   const baseConfig = pluginOptionsToRinglyConfig(readRinglyPluginOptions(), DEFAULT_CONFIG);
+  // Snapshot the pre-edit status-line state so we can detect an on/off flip and
+  // install/uninstall the `statusLine` key accordingly.
+  const previousStatuslineEnabled = baseConfig.statusline.enabled;
 
   await new Promise<void>((resolve) => {
     const { unmount, waitUntilExit } = render(
@@ -47,11 +51,25 @@ export async function runConfig(): Promise<void> {
         settingsFile: getClaudeSettingsFile(),
         onComplete: async (config) => {
           try {
+            // Reconcile the statusLine key FIRST (off→on captures the backup),
+            // then persist options — the write merges and preserves the backup.
+            const action = syncStatuslineInstall(
+              previousStatuslineEnabled,
+              config.statusline.enabled,
+            );
+            if (action === "install-failed") {
+              console.log("");
+              console.log(
+                `  ${chalk.yellow("⚠")}  ${translator.t("cli.statusline.install_failed")}`,
+              );
+            }
+
             const result = writeRinglyPluginOptions(ringlyConfigToPluginOptions(config));
             logger.info("Plugin options updated in Claude Code settings", {
               file: result.file,
               language: config.language,
               events: config.events,
+              statuslineAction: action,
             });
             if (result.wasCreated) {
               logger.info("Created fresh ~/.claude/settings.json");

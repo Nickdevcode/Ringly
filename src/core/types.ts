@@ -93,6 +93,75 @@ export interface ToastOptions {
   displayTimestamp?: string | undefined;
 }
 
+/**
+ * Where the context-usage meter sits in the status line:
+ *  - `"end"`   — appended after the directory (default; the historical layout).
+ *  - `"front"` — glued right after the model name, so the meter stays visible
+ *                even in narrow terminals that truncate the right side.
+ */
+export type StatuslineContextPosition = "end" | "front";
+
+/**
+ * The status-line segment keys, in TUI order. Declared here (a runtime-free
+ * module both the hot-path config reader and the settings writer can import
+ * without a cycle) so the type, the default map, the env-override loop, and
+ * the settings read/write paths all iterate the same set. Adding a segment is
+ * a one-line change here plus `StatuslineSegments`.
+ */
+export const STATUSLINE_SEGMENT_KEYS = [
+  "model",
+  "task",
+  "dirname",
+  "context",
+  "lastCommand",
+  "git",
+  "lines",
+  "rateLimits",
+] as const;
+
+/**
+ * Per-segment on/off switches for the status line. Each key toggles one visual
+ * chunk; unlike the notification events these carry no extra metadata, so they
+ * are a plain fixed record instead of a registry.
+ *
+ * The key set is locked to `STATUSLINE_SEGMENT_KEYS` via the `satisfies` check
+ * below, so the array and this interface can never drift apart.
+ */
+export interface StatuslineSegments {
+  /** Dim model display name (e.g. "Opus"). */
+  model: boolean;
+  /** The current in-progress todo task, shown bold (the "middle" segment). */
+  task: boolean;
+  /** Dim basename of the working directory. */
+  dirname: boolean;
+  /** The 10-block context-window usage meter. */
+  context: boolean;
+  /** The `last: /command` suffix read from the transcript. */
+  lastCommand: boolean;
+  /** Git branch + ahead/behind/dirty counters. */
+  git: boolean;
+  /** Session lines added/removed (`+N -M`). */
+  lines: boolean;
+  /** Claude.ai 5-hour / 7-day rate-limit meters. */
+  rateLimits: boolean;
+}
+
+// Compile-time guarantee that the key array matches the interface exactly.
+const _segmentKeysCheck: readonly (keyof StatuslineSegments)[] = STATUSLINE_SEGMENT_KEYS;
+void _segmentKeysCheck;
+
+/**
+ * Status line configuration. `enabled` is the master switch: turning it on
+ * installs Ringly's renderer into `~/.claude/settings.json`'s `statusLine`
+ * key (backing up whatever was there); turning it off restores the backup.
+ * `segments` and `position` only affect what the renderer prints.
+ */
+export interface StatuslineConfig {
+  enabled: boolean;
+  position: StatuslineContextPosition;
+  segments: StatuslineSegments;
+}
+
 export interface RinglyConfig {
   schemaVersion: 1;
   language: LanguageSetting;
@@ -104,6 +173,8 @@ export interface RinglyConfig {
   debug: boolean;
   checkUpdates: boolean;
   appId: string;
+  /** Status line feature — opt-in, off by default. See `StatuslineConfig`. */
+  statusline: StatuslineConfig;
 }
 
 export interface NotificationChannel {

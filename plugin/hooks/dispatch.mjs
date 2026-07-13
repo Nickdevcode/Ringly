@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync as nodeSpawnSync, spawn } from "node:child_process";
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -191,6 +191,53 @@ function debugLog(msg) {
     appendFileSync(file, `[${new Date().toISOString()}] ${msg}\n`, { encoding: "utf8" });
   } catch {
     /* silent */
+  }
+}
+
+/**
+ * Re-pins Ringly's status-line command to this plugin's current absolute path.
+ *
+ * Why: `${CLAUDE_PLUGIN_ROOT}` is NOT expanded inside `statusLine.command`
+ * (only in hooks.json — see anthropics/claude-code#64074), so the CLI bakes an
+ * absolute path at install time. That path goes stale when the plugin dir moves
+ * (npm update → new versioned dir, cache relocation, another machine). This
+ * runs on SessionStart — where `CLAUDE_PLUGIN_ROOT` IS available — to correct it.
+ *
+ * Guards (fail-silent, never throws):
+ *   - only when opted-in (`statusline_enabled === true`);
+ *   - only rewrite a `statusLine.command` that ALREADY references our renderer
+ *     (never hijack a statusLine the user set) and only when it actually differs;
+ *   - never CREATE the key here (install does that); the target file must exist.
+ */
+function repinStatusline() {
+  try {
+    const root = process.env["CLAUDE_PLUGIN_ROOT"];
+    if (!root || OPTIONS.statusline_enabled !== true) return;
+
+    const target = join(root, "statusline", "ringly-statusline.mjs");
+    if (!existsSync(target)) return;
+
+    const want = `node "${target.replace(/\\/g, "/")}"`;
+
+    if (!existsSync(SETTINGS_FILE)) return;
+    const raw = readFileSync(SETTINGS_FILE, { encoding: "utf8" });
+    if (raw.trim().length === 0) return;
+    const settings = JSON.parse(raw);
+
+    const current = settings?.statusLine?.command;
+    // Only touch a command that is already ours, and only if it drifted.
+    if (typeof current !== "string" || !current.includes("ringly-statusline.mjs")) return;
+    if (current === want) return;
+
+    settings.statusLine = { ...settings.statusLine, command: want };
+
+    // Atomic-ish write: temp file + rename, so a crash can't leave a half file.
+    const tmp = `${SETTINGS_FILE}.ringly-repin.${process.pid}`;
+    writeFileSync(tmp, `${JSON.stringify(settings, null, 2)}\n`, { encoding: "utf8" });
+    renameSync(tmp, SETTINGS_FILE);
+    debugLog(`Re-pinned statusLine to ${want}`);
+  } catch (err) {
+    debugLog(`Status line re-pin skipped: ${err?.message ?? err}`);
   }
 }
 
@@ -635,6 +682,11 @@ async function main() {
   }
 
   debugLog(`Event=${event}, stdinBytes=${rawStdin.length}, opts=${JSON.stringify(OPTIONS)}`);
+
+  // SessionStart is our chance to correct a stale status-line path (see
+  // repinStatusline). Do it before the check_updates gate so it runs even when
+  // update checks are off — it's independent of the update check.
+  if (event === "SessionStart") repinStatusline();
 
   // `TaskCreated` while the counter is on but its own toast is off: it must
   // still reach the CLI module to be tallied (the counter's denominator), but

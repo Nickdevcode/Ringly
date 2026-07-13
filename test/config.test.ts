@@ -9,6 +9,10 @@ const TARGET_VARS = [
   "CLAUDE_PLUGIN_OPTION_EVENTS_SUBAGENTSTOP",
   "CLAUDE_PLUGIN_OPTION_SOUND",
   "CLAUDE_PLUGIN_OPTION_DEBUG",
+  "CLAUDE_PLUGIN_OPTION_STATUSLINE_ENABLED",
+  "CLAUDE_PLUGIN_OPTION_STATUSLINE_POSITION",
+  "CLAUDE_PLUGIN_OPTION_STATUSLINE_SEGMENTS_GIT",
+  "CLAUDE_PLUGIN_OPTION_STATUSLINE_SEGMENTS_LASTCOMMAND",
 ];
 
 describe("applyEnvOverrides", () => {
@@ -59,5 +63,32 @@ describe("applyEnvOverrides", () => {
     const result = applyEnvOverrides(DEFAULT_CONFIG);
     expect(result.sound).toBe(false);
     expect(result.debug).toBe(true);
+  });
+
+  it("toggles the status line master switch and segments", () => {
+    process.env["CLAUDE_PLUGIN_OPTION_STATUSLINE_ENABLED"] = "true";
+    process.env["CLAUDE_PLUGIN_OPTION_STATUSLINE_SEGMENTS_GIT"] = "false";
+    process.env["CLAUDE_PLUGIN_OPTION_STATUSLINE_SEGMENTS_LASTCOMMAND"] = "true";
+    const result = applyEnvOverrides(DEFAULT_CONFIG);
+    expect(result.statusline.enabled).toBe(true);
+    expect(result.statusline.segments.git).toBe(false);
+    expect(result.statusline.segments.lastCommand).toBe(true);
+    // Untouched segments keep their defaults.
+    expect(result.statusline.segments.model).toBe(true);
+  });
+
+  it("accepts a valid status line position and ignores an invalid one", () => {
+    process.env["CLAUDE_PLUGIN_OPTION_STATUSLINE_POSITION"] = "front";
+    expect(applyEnvOverrides(DEFAULT_CONFIG).statusline.position).toBe("front");
+
+    process.env["CLAUDE_PLUGIN_OPTION_STATUSLINE_POSITION"] = "sideways";
+    expect(applyEnvOverrides(DEFAULT_CONFIG).statusline.position).toBe(
+      DEFAULT_CONFIG.statusline.position,
+    );
+  });
+
+  it("defaults the status line to disabled", () => {
+    expect(DEFAULT_CONFIG.statusline.enabled).toBe(false);
+    expect(DEFAULT_CONFIG.statusline.position).toBe("end");
   });
 });

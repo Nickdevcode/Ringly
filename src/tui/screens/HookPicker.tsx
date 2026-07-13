@@ -60,7 +60,7 @@ export const HookPicker: FC<HookPickerProps> = ({ translator, initial, onSubmit 
       <Header
         translator={translator}
         step={2}
-        totalSteps={4}
+        totalSteps={5}
         title={translator.t("tui.events.title")}
         subtitle={translator.t("tui.events.subtitle", {
           enabled: enabledCount,

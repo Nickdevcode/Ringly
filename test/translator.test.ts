@@ -1,5 +1,38 @@
+import enUS from "../src/locales/en-US.json" with { type: "json" };
+import ptBR from "../src/locales/pt-BR.json" with { type: "json" };
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTranslator, detectSystemLanguage, resolveLanguage } from "../src/core/translator.js";
+
+describe("locale parity", () => {
+  it("pt-BR and en-US define exactly the same keys", () => {
+    const ptKeys = Object.keys(ptBR).sort();
+    const enKeys = Object.keys(enUS).sort();
+    const missingInPt = enKeys.filter((k) => !(k in ptBR));
+    const missingInEn = ptKeys.filter((k) => !(k in enUS));
+    expect(missingInPt, `keys missing in pt-BR: ${missingInPt.join(", ")}`).toEqual([]);
+    expect(missingInEn, `keys missing in en-US: ${missingInEn.join(", ")}`).toEqual([]);
+  });
+
+  it("has the status line keys the TUI references", () => {
+    // A representative sample — if these resolve, the StatuslinePicker won't
+    // render raw keys. Full parity is covered above.
+    const required = [
+      "tui.statusline.title",
+      "tui.statusline.explain",
+      "tui.statusline.enabled.label",
+      "tui.statusline.position.end",
+      "tui.statusline.position.front",
+      "tui.statusline.segment.git.label",
+      "tui.statusline.segment.rateLimits.desc",
+      "tui.welcome.step5",
+      "cli.uninstall.statusline_restored",
+    ];
+    for (const key of required) {
+      expect(key in enUS, `en-US missing ${key}`).toBe(true);
+      expect(key in ptBR, `pt-BR missing ${key}`).toBe(true);
+    }
+  });
+});
 
 describe("translator", () => {
   it("translates fixed keys in pt-BR", () => {

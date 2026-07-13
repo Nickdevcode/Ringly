@@ -11,7 +11,13 @@
 import { pluginOptionsToRinglyConfig, readRinglyPluginOptions } from "./claudeSettings.js";
 import { buildDefaultEvents, EVENTS, envSuffix } from "./events.js";
 import { logger } from "./logger.js";
-import { DEFAULT_APP_ID, type LanguageSetting, type RinglyConfig } from "./types.js";
+import {
+  DEFAULT_APP_ID,
+  type LanguageSetting,
+  type RinglyConfig,
+  STATUSLINE_SEGMENT_KEYS,
+  type StatuslineContextPosition,
+} from "./types.js";
 
 export const DEFAULT_CONFIG: RinglyConfig = {
   schemaVersion: 1,
@@ -22,6 +28,23 @@ export const DEFAULT_CONFIG: RinglyConfig = {
   debug: false,
   checkUpdates: true,
   appId: DEFAULT_APP_ID,
+  // Status line is opt-in (off by default) so installing Ringly never touches
+  // the user's existing `statusLine`. `lastCommand` is off by default to match
+  // the original hybrid statusline's gated behavior; every other segment is on.
+  statusline: {
+    enabled: false,
+    position: "end",
+    segments: {
+      model: true,
+      task: true,
+      dirname: true,
+      context: true,
+      lastCommand: false,
+      git: true,
+      lines: true,
+      rateLimits: true,
+    },
+  },
 };
 
 /**
@@ -62,6 +85,10 @@ export function applyEnvOverrides(config: RinglyConfig): RinglyConfig {
   const next: RinglyConfig = {
     ...config,
     events: { ...config.events },
+    statusline: {
+      ...config.statusline,
+      segments: { ...config.statusline.segments },
+    },
   };
 
   const lang = process.env["CLAUDE_PLUGIN_OPTION_LANGUAGE"];
@@ -84,10 +111,29 @@ export function applyEnvOverrides(config: RinglyConfig): RinglyConfig {
   const checkUpdates = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_CHECK_UPDATES"]);
   if (checkUpdates !== null) next.checkUpdates = checkUpdates;
 
+  // Status line overrides mirror the events loop: one env var per switch.
+  const slEnabled = readBoolean(process.env["CLAUDE_PLUGIN_OPTION_STATUSLINE_ENABLED"]);
+  if (slEnabled !== null) next.statusline.enabled = slEnabled;
+
+  const slPosition = process.env["CLAUDE_PLUGIN_OPTION_STATUSLINE_POSITION"];
+  if (slPosition === "end" || slPosition === "front") next.statusline.position = slPosition;
+
+  for (const key of STATUSLINE_SEGMENT_KEYS) {
+    const value = readBoolean(
+      process.env[`CLAUDE_PLUGIN_OPTION_STATUSLINE_SEGMENTS_${key.toUpperCase()}`],
+    );
+    if (value !== null) next.statusline.segments[key] = value;
+  }
+
   next.appId = normalizeAppId(next.appId);
   next.language = normalizeLanguage(next.language);
+  next.statusline.position = normalizeStatuslinePosition(next.statusline.position);
 
   return next;
+}
+
+function normalizeStatuslinePosition(value: unknown): StatuslineContextPosition {
+  return value === "front" ? "front" : "end";
 }
 
 function readBoolean(raw: string | undefined): boolean | null {

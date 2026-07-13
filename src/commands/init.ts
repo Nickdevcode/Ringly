@@ -4,6 +4,7 @@ import chalk from "chalk";
 import envPaths from "env-paths";
 import { render } from "ink";
 import React from "react";
+import { syncStatuslineInstall } from "../core/claudeSettingsWrite.js";
 import { DEFAULT_CONFIG, loadConfig } from "../core/config.js";
 import { saveConfig } from "../core/configWrite.js";
 import { logger } from "../core/logger.js";
@@ -41,6 +42,7 @@ export async function runInit(options: RunInitOptions = {}): Promise<void> {
   }
 
   const baseConfig: RinglyConfig = options.force ? { ...DEFAULT_CONFIG } : loadConfig();
+  const previousStatuslineEnabled = baseConfig.statusline.enabled;
 
   await new Promise<void>((resolve) => {
     const { unmount, waitUntilExit } = render(
@@ -50,6 +52,8 @@ export async function runInit(options: RunInitOptions = {}): Promise<void> {
         registerAumidFn: isWindows ? (appId: string) => registerAumid({ appId }) : undefined,
         onComplete: async (config, aumidResult) => {
           try {
+            // Reconcile the statusLine key on an on/off flip, before saving.
+            syncStatuslineInstall(previousStatuslineEnabled, config.statusline.enabled);
             saveConfig(config);
             writeInstallLog(config, aumidResult);
             logger.info("Init finished", {
@@ -81,7 +85,18 @@ async function runNonInteractive(translator: Translator, isWindows: boolean): Pr
   console.log(chalk.cyan(`╰${border}╯`));
   console.log("");
 
+  // If the status line was previously enabled, resetting to defaults (off)
+  // must restore whatever statusLine was there before Ringly.
+  const previousStatuslineEnabled = (() => {
+    try {
+      return loadConfig().statusline.enabled;
+    } catch {
+      return false;
+    }
+  })();
+
   const config = { ...DEFAULT_CONFIG };
+  syncStatuslineInstall(previousStatuslineEnabled, config.statusline.enabled);
   saveConfig(config);
   console.log(`  ${chalk.green("✓")}  ${translator.t("cli.init.default_saved")}`);
 

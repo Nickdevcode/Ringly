@@ -192,12 +192,29 @@ As chaves abaixo ficam em `pluginConfigs.ringly.options` dentro de `~/.claude/se
 | `sound`                | boolean               |  true  | Toca som junto da notificação.                        |
 | `debug`                | boolean               | false  | Escreve logs detalhados.                              |
 | `check_updates`        | boolean               |  true  | Checa o npm 1x/dia no SessionStart e avisa via toast quando tem versão nova. |
+| `statusline_enabled`   | boolean               | false  | **Liga a status line** (a barra no rodapé do terminal). Ao ligar, substitui a `statusLine` atual do `settings.json` (com backup). |
+| `statusline_position`  | `end / front`         | `end`  | Onde o medidor de contexto fica: `end` (depois da pasta) ou `front` (logo após o modelo). |
+| `statusline_segment_*` | boolean               |   —    | Um por segmento (`model`, `task`, `dirname`, `context`, `lastCommand`, `git`, `lines`, `rateLimits`). Ligado por padrão, exceto `lastCommand`. |
 
 > **Eventos verbosos** (subagent start, tarefas, compactação) vêm **desligados por padrão** e são
 > **throttled/deduplicados**: numa sessão movimentada, o Ringly agrupa disparos repetidos (mesmo
 > evento + projeto + subagent dentro de uma janela curta) pra não inundar a Central de Notificações.
 > Ligue os que quiser pelo `ringly config`. **Adicionar uma notificação nova ao Ringly hoje é mudar
 > 1 lugar** (o registro de eventos em `src/core/events.ts`) + as traduções — o resto é derivado.
+
+#### Status line (barra no rodapé do terminal) 📊
+
+O Ringly também pode desenhar uma **status line** — aquela barra no rodapé do Claude Code que mostra, num relance:
+
+```
+Opus 4.8 │ meu-projeto ███░░░░░░░ 34% │ main ●26 │ +631 -88 │ 5h █░░░░ 34% (1h 59m) · 7d ███░░ 62% (2d 23h)
+```
+
+Da esquerda pra direita: **modelo**, **tarefa atual** (em negrito, quando tem uma rodando), **pasta** + **medidor de contexto** colorido, **git** (branch + ahead/behind/arquivos sujos), **linhas +/-** da sessão e os **limites de uso** de 5h/7d (só pra Pro/Max). Cada pedaço desses é um **toggle** — você liga só o que quiser.
+
+- **Vem desligada por padrão.** Ligue pelo `ringly config` (é uma tela nova, igual às de eventos/som) ou setando `statusline_enabled: true`.
+- **Só pode existir uma status line no Claude Code.** Ao ligar, o Ringly **faz backup** da sua `statusLine` atual antes de substituir; ao desligar (ou `ringly uninstall`), **restaura** a anterior. Se você trocou a status line na mão depois, o Ringly não mexe nela.
+- **O caminho se auto-corrige.** Como o Claude Code não expande `${CLAUDE_PLUGIN_ROOT}` na `statusLine`, o Ringly grava um caminho absoluto e o **re-fixa a cada SessionStart** — então um `ringly update` que muda a pasta do plugin não quebra a barra.
 
 ### Comandos da CLI
 
@@ -472,12 +489,29 @@ The keys below live in `pluginConfigs.ringly.options` inside `~/.claude/settings
 | `sound`                | boolean                |  true   | Play a sound with each notification.                     |
 | `debug`                | boolean                |  false  | Write detailed logs.                                     |
 | `check_updates`        | boolean                |  true   | Check npm once a day at session start and notify via toast when a new version ships. |
+| `statusline_enabled`   | boolean                |  false  | **Turns the status line on** (the bottom bar in the terminal). Enabling it replaces your current `settings.json` `statusLine` (with a backup). |
+| `statusline_position`  | `end / front`          |  `end`  | Where the context meter sits: `end` (after the directory) or `front` (right after the model). |
+| `statusline_segment_*` | boolean                |    —    | One per segment (`model`, `task`, `dirname`, `context`, `lastCommand`, `git`, `lines`, `rateLimits`). On by default, except `lastCommand`. |
 
 > **Verbose events** (subagent start, tasks, compaction) ship **off by default** and are
 > **throttled/deduped**: in a busy session Ringly collapses repeated fires (same event + project +
 > subagent within a short window) so they can't flood the Action Center. Turn on the ones you want
 > via `ringly config`. **Adding a new notification to Ringly is now a one-place change** (the event
 > registry in `src/core/events.ts`) plus its translations — everything else is derived.
+
+#### Status line (the bottom bar in the terminal) 📊
+
+Ringly can also draw a **status line** — that bar at the bottom of Claude Code that shows, at a glance:
+
+```
+Opus 4.8 │ my-project ███░░░░░░░ 34% │ main ●26 │ +631 -88 │ 5h █░░░░ 34% (1h 59m) · 7d ███░░ 62% (2d 23h)
+```
+
+Left to right: **model**, **current task** (bold, when one is running), **directory** + a colored **context meter**, **git** (branch + ahead/behind/dirty), session **lines +/-**, and the 5-hour / 7-day **rate limits** (Pro/Max only). Each of those is a **toggle** — enable only what you want.
+
+- **Off by default.** Turn it on via `ringly config` (a new screen, just like the events/sound ones) or by setting `statusline_enabled: true`.
+- **Claude Code allows only one status line.** When you enable it, Ringly **backs up** your current `statusLine` before replacing it; disabling it (or `ringly uninstall`) **restores** the previous one. If you swapped the status line by hand afterward, Ringly leaves it alone.
+- **The path self-heals.** Because Claude Code doesn't expand `${CLAUDE_PLUGIN_ROOT}` inside `statusLine`, Ringly writes an absolute path and **re-pins it on every SessionStart** — so a `ringly update` that moves the plugin folder won't break the bar.
 
 ### CLI commands
 

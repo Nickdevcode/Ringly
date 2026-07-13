@@ -1,7 +1,7 @@
 import { Box, useApp } from "ink";
 import { type FC, useCallback, useMemo, useState } from "react";
 import { createTranslator } from "../core/translator.js";
-import type { LanguageSetting, RinglyConfig } from "../core/types.js";
+import type { LanguageSetting, RinglyConfig, StatuslineConfig } from "../core/types.js";
 import type { RegisterAumidResult } from "../platform/windows/aumid.js";
 import { AumidRegister } from "./screens/AumidRegister.js";
 import { ConfigDone } from "./screens/ConfigDone.js";
@@ -9,9 +9,10 @@ import { Done } from "./screens/Done.js";
 import { type EventToggles, HookPicker } from "./screens/HookPicker.js";
 import { LanguagePicker } from "./screens/LanguagePicker.js";
 import { SoundDebugPicker, type SoundDebugValues } from "./screens/SoundDebugPicker.js";
+import { StatuslinePicker } from "./screens/StatuslinePicker.js";
 import { Welcome } from "./screens/Welcome.js";
 
-type Stage = "welcome" | "language" | "events" | "sound" | "aumid" | "done";
+type Stage = "welcome" | "language" | "events" | "sound" | "statusline" | "aumid" | "done";
 
 export type AppMode = "init" | "config";
 
@@ -59,6 +60,7 @@ export const App: FC<AppProps> = ({
     sound: initialConfig.sound,
     debug: initialConfig.debug,
   });
+  const [statusline, setStatusline] = useState<StatuslineConfig>(initialConfig.statusline);
   const [, setAumid] = useState<RegisterAumidResult | null>(null);
 
   const finish = useCallback(
@@ -69,11 +71,12 @@ export const App: FC<AppProps> = ({
         events,
         sound: soundDebug.sound,
         debug: soundDebug.debug,
+        statusline,
       };
       await onComplete(nextConfig, aumidResult);
       setStage("done");
     },
-    [initialConfig, language, events, soundDebug, onComplete],
+    [initialConfig, language, events, soundDebug, statusline, onComplete],
   );
 
   return (
@@ -106,6 +109,16 @@ export const App: FC<AppProps> = ({
           initial={soundDebug}
           onSubmit={(values) => {
             setSoundDebug(values);
+            setStage("statusline");
+          }}
+        />
+      )}
+      {stage === "statusline" && (
+        <StatuslinePicker
+          translator={translator}
+          initial={statusline}
+          onSubmit={(value) => {
+            setStatusline(value);
             if (mode === "init" && isWindows && registerAumidFn) {
               setStage("aumid");
             } else {

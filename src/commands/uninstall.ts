@@ -1,6 +1,6 @@
 import { existsSync, unlinkSync } from "node:fs";
 import chalk from "chalk";
-import { removeRinglyPluginOptions } from "../core/claudeSettingsWrite.js";
+import { removeRinglyPluginOptions, uninstallStatusLine } from "../core/claudeSettingsWrite.js";
 import { loadConfig } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { createTranslator } from "../core/translator.js";
@@ -41,6 +41,24 @@ export async function runUninstall(options: RunUninstallOptions = {}): Promise<v
     } else {
       console.log(`  ${chalk.dim("·")}  ${translator.t("cli.uninstall.shortcut_absent")}`);
     }
+  }
+
+  // Restore the previous statusLine BEFORE removing plugin options — the removal
+  // deletes the whole `pluginConfigs.ringly` block (including the backup), so
+  // restoring after it would be impossible. Runs regardless of --keep-config:
+  // the statusLine is a global key and leaving Ringly's active during uninstall
+  // would be surprising. Reads the backup itself, so it no-ops when unused.
+  try {
+    const result = uninstallStatusLine();
+    if (result.restored) {
+      console.log(`  ${chalk.green("✓")}  ${translator.t("cli.uninstall.statusline_restored")}`);
+    } else {
+      console.log(`  ${chalk.dim("·")}  ${translator.t("cli.uninstall.statusline_absent")}`);
+    }
+  } catch (err) {
+    logger.warn("Failed to restore statusLine during uninstall", {
+      message: (err as Error).message,
+    });
   }
 
   if (!options.keepConfig) {

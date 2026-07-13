@@ -136,6 +136,51 @@ describe("claudeSettings", () => {
     expect(config.language).toBe(DEFAULT_CONFIG.language);
   });
 
+  it("emits statusline flat keys but never statusline_previous", () => {
+    const opts = ringlyConfigToPluginOptions({
+      ...DEFAULT_CONFIG,
+      statusline: {
+        enabled: true,
+        position: "front",
+        segments: { ...DEFAULT_CONFIG.statusline.segments, git: false, lastCommand: true },
+      },
+    });
+    expect(opts.statusline_enabled).toBe(true);
+    expect(opts.statusline_position).toBe("front");
+    expect(opts.statusline_segment_git).toBe(false);
+    expect(opts.statusline_segment_lastCommand).toBe(true);
+    expect(opts.statusline_segment_model).toBe(true);
+    // Install metadata must not leak into the config→options mapping.
+    expect("statusline_previous" in opts).toBe(false);
+  });
+
+  it("reads statusline flat keys back into a nested config", () => {
+    const config = pluginOptionsToRinglyConfig(
+      {
+        statusline_enabled: true,
+        statusline_position: "front",
+        statusline_segment_git: false,
+      },
+      DEFAULT_CONFIG,
+    );
+    expect(config.statusline.enabled).toBe(true);
+    expect(config.statusline.position).toBe("front");
+    expect(config.statusline.segments.git).toBe(false);
+    // Absent segment keys fall back to defaults (old-file compatibility).
+    expect(config.statusline.segments.model).toBe(DEFAULT_CONFIG.statusline.segments.model);
+  });
+
+  it("defaults statusline to off when options predate the feature", () => {
+    const config = pluginOptionsToRinglyConfig({ language: "pt-BR" }, DEFAULT_CONFIG);
+    expect(config.statusline.enabled).toBe(false);
+    expect(config.statusline.position).toBe("end");
+  });
+
+  it("ignores an invalid statusline_position", () => {
+    const config = pluginOptionsToRinglyConfig({ statusline_position: "diagonal" }, DEFAULT_CONFIG);
+    expect(config.statusline.position).toBe(DEFAULT_CONFIG.statusline.position);
+  });
+
   it("does not leave .tmp.* leftover files after a successful write", () => {
     writeRinglyPluginOptions({ language: "pt-BR" });
 

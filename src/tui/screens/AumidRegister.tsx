@@ -55,8 +55,8 @@ export const AumidRegister: FC<AumidRegisterProps> = ({
     <Box flexDirection="column">
       <Header
         translator={translator}
-        step={4}
-        totalSteps={4}
+        step={5}
+        totalSteps={5}
         title={translator.t("tui.aumid.title")}
         subtitle={translator.t("tui.aumid.subtitle")}
       />

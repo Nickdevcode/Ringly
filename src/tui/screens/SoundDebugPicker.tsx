@@ -56,7 +56,7 @@ export const SoundDebugPicker: FC<SoundDebugPickerProps> = ({ translator, initia
       <Header
         translator={translator}
         step={3}
-        totalSteps={4}
+        totalSteps={5}
         title={translator.t("tui.sound.title")}
         subtitle={translator.t("tui.sound.subtitle")}
       />

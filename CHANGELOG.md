@@ -5,6 +5,68 @@
 
 ---
 
+## [0.9.0] — 2026-07-12
+
+### 🇧🇷 Português
+
+**Adicionado**
+
+- **Status line 📊 — a barra no rodapé do terminal, agora nativa no Ringly.** O Claude Code pode desenhar uma barra no rodapé com informação da sessão; agora o Ringly desenha a dele. Da esquerda pra direita: **modelo**, **tarefa atual** (em negrito, quando tem uma rodando), **pasta** + um **medidor de contexto** colorido (verde → amarelo → laranja → 💀 conforme enche), **git** (branch + ahead/behind/arquivos sujos), **linhas +/-** da sessão e os **limites de uso** de 5h/7d (só pra Pro/Max). Exemplo:
+  ```
+  Opus 4.8 │ meu-projeto ███░░░░░░░ 34% │ main ●26 │ +631 -88 │ 5h █░░░░ 34% (1h 59m) · 7d ███░░ 62% (2d 23h)
+  ```
+- **Cada segmento é um toggle e vem numa tela nova do `ringly config`.** Igual às telas de eventos e som: liga/desliga a barra inteira (interruptor mestre) e escolhe **quais pedaços** aparecem. A tela explica o que é uma status line (porque nem todo mundo sabe) e deixa escolher a **posição do medidor de contexto** (`fim` ou `início`) com as setas ←/→.
+- **Vem desligada por padrão — ligar não sobrescreve nada sem backup.** Como o Claude Code só permite **uma** status line, ao ligar a nossa o Ringly **faz backup** da `statusLine` que já estava no seu `settings.json` e a restaura quando você desliga (ou roda `ringly uninstall`). Se você trocou a status line na mão depois de ligar a nossa, o Ringly **não mexe nela** — nunca pisamos numa status line que você escolheu.
+- **Novas opções em `pluginConfigs.ringly.options`:** `statusline_enabled` (boolean, padrão `false`), `statusline_position` (`end`/`front`, padrão `end`) e um `statusline_segment_<nome>` por segmento (`model`, `task`, `dirname`, `context`, `lastCommand`, `git`, `lines`, `rateLimits` — todos ligados por padrão, exceto `lastCommand`). Também dá pra sobrescrever por ambiente via `CLAUDE_PLUGIN_OPTION_STATUSLINE_*`.
+- **O `ringly doctor` ganhou uma verificação da status line** (só aparece quando ela está ligada): confere se o renderizador existe, se a `statusLine` do `settings.json` aponta mesmo pro Ringly, e avisa se `disableAllHooks` estiver ligado (isso desliga a status line silenciosamente).
+
+**Detalhes técnicos**
+
+- **O caminho da status line se auto-corrige a cada SessionStart.** O Claude Code **não expande** `${CLAUDE_PLUGIN_ROOT}` dentro de `statusLine.command` (só em `hooks.json` — confirmado na [issue oficial #64074](https://github.com/anthropics/claude-code/issues/64074)). Então o Ringly grava um **caminho absoluto** ao instalar e o **re-fixa a cada SessionStart** (`plugin/hooks/dispatch.mjs`), de forma guardada e silenciosa: só reescreve uma `statusLine` que já é nossa, nunca cria do zero nem sequestra a de outro. Assim um `ringly update` que muda a pasta versionada do plugin não quebra a barra.
+- **No Windows o comando usa forward slashes.** O Claude Code roda a `statusLine` via Git Bash, que engole backslashes sem avisar — então o comando fica `node "C:/.../ringly-statusline.mjs"` (barras normais, com aspas pra aguentar espaços no caminho).
+- **O renderizador é um `.mjs` standalone e à prova de falhas** (`plugin/statusline/ringly-statusline.mjs`). Roda a cada frame do terminal, então não importa **nada** do bundle da CLI (fica leve) e falha em silêncio em tudo (um erro nunca quebra a barra — no pior caso ela some). Lê a própria config direto do `settings.json`.
+- **A escrita da chave `statusLine` foi centralizada** num único ponto de mutação do `settings.json` (`mutateClaudeSettings`), com backup do arquivo inteiro + escrita atômica + `chmod 600`, reaproveitado pelas quatro operações (salvar opções, remover, instalar e desinstalar a status line) pra não ter três cópias divergentes da mesma dança.
+- **Corrigido um bug herdado da fonte original:** o cálculo do medidor de contexto lia `context_window.total_tokens`, campo que **não existe mais** na API do Claude Code (virou `context_window_size`). Só afetava quem usa `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, mas foi corrigido de qualquer forma.
+
+**Testes**
+
+- **+44 testes** (de 289 para 333): idempotência do backup/restore da `statusLine` (captura-uma-vez, não pisar na do usuário, restaurar na desinstalação), renderização de cada segmento com as cores/limiares certos, o compositor da linha (paridade com o layout original), a transição liga/desliga que os comandos disparam, e **paridade de chaves i18n** entre `pt-BR` e `en-US` (garante que nenhuma tradução fica faltando).
+
+**Notas pra quem tá vindo da v0.8.3**
+
+- **Nada quebra e nada muda sozinho.** A status line **vem desligada** — seu setup atual (notificações, ícone, toasts) segue idêntico. Pra experimentar, rode `ringly config` e ligue na tela nova "Status line". Se não quiser, é só ignorar. Arquivos de `settings.json` antigos são lidos sem erro (as opções novas assumem os padrões).
+
+### 🇺🇸 English
+
+**Added**
+
+- **Status line 📊 — the bar at the bottom of the terminal, now native to Ringly.** Claude Code can draw a bottom bar with session info; now Ringly draws its own. Left to right: **model**, **current task** (bold, when one is running), **directory** + a colored **context meter** (green → yellow → orange → 💀 as it fills), **git** (branch + ahead/behind/dirty), session **lines +/-**, and the 5-hour / 7-day **rate limits** (Pro/Max only). Example:
+  ```
+  Opus 4.8 │ my-project ███░░░░░░░ 34% │ main ●26 │ +631 -88 │ 5h █░░░░ 34% (1h 59m) · 7d ███░░ 62% (2d 23h)
+  ```
+- **Every segment is a toggle, in a new `ringly config` screen.** Just like the events and sound screens: turn the whole bar on/off (master switch) and pick **which pieces** show. The screen explains what a status line is (not everyone knows) and lets you choose the **context meter position** (`end` or `front`) with the ←/→ arrows.
+- **Off by default — enabling it never overwrites anything without a backup.** Since Claude Code allows only **one** status line, enabling ours makes Ringly **back up** whatever `statusLine` was already in your `settings.json` and restore it when you turn ours off (or run `ringly uninstall`). If you swapped the status line by hand after enabling ours, Ringly **leaves it alone** — we never stomp a status line you chose.
+- **New options in `pluginConfigs.ringly.options`:** `statusline_enabled` (boolean, default `false`), `statusline_position` (`end`/`front`, default `end`), and one `statusline_segment_<name>` per segment (`model`, `task`, `dirname`, `context`, `lastCommand`, `git`, `lines`, `rateLimits` — all on by default, except `lastCommand`). Also overridable via `CLAUDE_PLUGIN_OPTION_STATUSLINE_*` env vars.
+- **`ringly doctor` gained a status-line check** (shown only when it's enabled): verifies the renderer exists, that `settings.json`'s `statusLine` actually points at Ringly, and warns if `disableAllHooks` is on (which silently disables the status line).
+
+**Technical details**
+
+- **The status-line path self-heals on every SessionStart.** Claude Code does **not** expand `${CLAUDE_PLUGIN_ROOT}` inside `statusLine.command` (only in `hooks.json` — confirmed in [official issue #64074](https://github.com/anthropics/claude-code/issues/64074)). So Ringly bakes an **absolute path** at install and **re-pins it on every SessionStart** (`plugin/hooks/dispatch.mjs`), guarded and silent: it only rewrites a `statusLine` that's already ours, never creates one from scratch or hijacks someone else's. That way a `ringly update` that moves the plugin's versioned folder won't break the bar.
+- **On Windows the command uses forward slashes.** Claude Code runs the `statusLine` through Git Bash, which silently eats backslashes — so the command is `node "C:/.../ringly-statusline.mjs"` (forward slashes, quoted to survive spaces in the path).
+- **The renderer is a standalone, fail-safe `.mjs`** (`plugin/statusline/ringly-statusline.mjs`). It runs on every terminal frame, so it imports **nothing** from the CLI bundle (stays lean) and fails silently everywhere (an error never breaks the bar — worst case it just disappears). It reads its own config straight from `settings.json`.
+- **Writing the `statusLine` key is centralized** in a single `settings.json` mutation point (`mutateClaudeSettings`), with a whole-file backup + atomic write + `chmod 600`, reused by all four operations (save options, remove, install and uninstall the status line) so there aren't three diverging copies of the same dance.
+- **Fixed a bug inherited from the original source:** the context-meter math read `context_window.total_tokens`, a field that **no longer exists** in Claude Code's API (it became `context_window_size`). It only affected users of `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, but was fixed regardless.
+
+**Tests**
+
+- **+44 tests** (from 289 to 333): `statusLine` backup/restore idempotency (capture-once, don't stomp the user's, restore on uninstall), rendering each segment with the right colors/thresholds, the line composer (parity with the original layout), the on/off transition the commands drive, and **i18n key parity** between `pt-BR` and `en-US` (guarantees no translation goes missing).
+
+**Notes if you're coming from v0.8.3**
+
+- **Nothing breaks and nothing changes on its own.** The status line ships **disabled** — your current setup (notifications, icon, toasts) stays identical. To try it, run `ringly config` and enable it in the new "Status line" screen. Don't want it? Just ignore it. Old `settings.json` files are read without error (the new options fall back to their defaults).
+
+---
+
 ## [0.8.3] — 2026-06-03
 
 ### 🇧🇷 Português

@@ -1,8 +1,13 @@
 import { existsSync } from "node:fs";
 import chalk from "chalk";
-import { getClaudeSettingsFile, readRinglyPluginOptions } from "../core/claudeSettings.js";
+import {
+  getClaudeSettingsFile,
+  readClaudeSettings,
+  readRinglyPluginOptions,
+} from "../core/claudeSettings.js";
 import { loadConfig } from "../core/config.js";
 import { logger } from "../core/logger.js";
+import { resolveStatuslineScriptPath, STATUSLINE_SCRIPT_FILENAME } from "../core/statuslinePath.js";
 import { createTranslator, type Translator } from "../core/translator.js";
 import { detectPlatform } from "../platform/index.js";
 import {
@@ -55,6 +60,12 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<void> {
   }
 
   checks.push(checkPluginOptions(translator));
+
+  // Only surface the status-line check when the user opted in — no point warning
+  // about it otherwise.
+  if (readRinglyPluginOptions().statusline_enabled === true) {
+    checks.push(checkStatusline(translator));
+  }
 
   if (options.json) {
     console.log(JSON.stringify({ platform, checks }, null, 2));
@@ -215,6 +226,49 @@ function checkPluginOptions(translator: Translator): CheckResult {
       language,
     }),
   };
+}
+
+function checkStatusline(translator: Translator): CheckResult {
+  const label = translator.t("cli.doctor.check.statusline");
+
+  // The renderer must resolve to a real file.
+  const scriptPath = resolveStatuslineScriptPath();
+  if (!scriptPath) {
+    return {
+      label,
+      level: "fail",
+      detail: translator.t("cli.doctor.check.statusline.script_missing"),
+      hint: translator.t("cli.doctor.check.statusline.script_missing_hint", {
+        command: "`ringly config`",
+      }),
+    };
+  }
+
+  // The statusLine key must point at our renderer.
+  const settings = readClaudeSettings();
+  const command = settings.statusLine?.command;
+  if (typeof command !== "string" || !command.includes(STATUSLINE_SCRIPT_FILENAME)) {
+    return {
+      label,
+      level: "warn",
+      detail: translator.t("cli.doctor.check.statusline.not_wired"),
+      hint: translator.t("cli.doctor.check.statusline.not_wired_hint", {
+        command: "`ringly config`",
+      }),
+    };
+  }
+
+  // disableAllHooks silently disables the statusLine too.
+  if (settings.disableAllHooks === true) {
+    return {
+      label,
+      level: "warn",
+      detail: translator.t("cli.doctor.check.statusline.hooks_disabled"),
+      hint: translator.t("cli.doctor.check.statusline.hooks_disabled_hint"),
+    };
+  }
+
+  return { label, level: "ok", detail: scriptPath };
 }
 
 function printReport(translator: Translator, platform: string, checks: CheckResult[]): void {

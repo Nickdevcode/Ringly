@@ -29,7 +29,7 @@ export const LanguagePicker: FC<LanguagePickerProps> = ({ translator, onSelect }
       <Header
         translator={translator}
         step={1}
-        totalSteps={4}
+        totalSteps={5}
         title={translator.t("tui.language.title")}
         subtitle={translator.t("tui.language.subtitle")}
       />
